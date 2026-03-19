@@ -22,7 +22,7 @@ RSS_FEEDS = [
 # This is your main lever. Be specific — the more precise you are,
 # the better the filtering and scoring will be.
 YOUR_INTERESTS = """
-The digest must be written entirely in German, regardless of the original language of the articles. This includes all summaries, topic group names, and any other text you generate. Translate and summarize into German.
+The digest must be written entirely in German, regardless of the original language of the articles. This includes all summaries, topic group names, and article titles. Translate everything into German.
 I'm interested in:
 - AI and technology, especially LLMs, AI agents, agentic commerce, developer tools
 - European and Central European politics (Austria, Hungary, EU institutions)
@@ -161,7 +161,10 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
 
 def format_html_email(analyzed_items):
     """Build a clean HTML email from the analyzed and grouped items."""
-    today = datetime.now().strftime("%A, %B %d, %Y")
+    DAYS_DE = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
+    MONTHS_DE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"]
+    now = datetime.now()
+    today = f"{DAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}"
     num_items = len(analyzed_items)
     num_sources = len(set(i.get("source", "") for i in analyzed_items))
 
@@ -190,7 +193,7 @@ def format_html_email(analyzed_items):
   Daily Digest
 </h1>
 <p style="color: #888; font-size: 13px; margin-top: 4px;">
-  {today} &nbsp;|&nbsp; {num_items} item{"s" if num_items != 1 else ""} from {num_sources} source{"s" if num_sources != 1 else ""}
+  {today} &nbsp;|&nbsp; {num_items} Artikel aus {num_sources} Quelle{"n" if num_sources != 1 else ""}
 </p>
 """
 
