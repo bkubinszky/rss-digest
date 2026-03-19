@@ -1,5 +1,6 @@
 import json
 import urllib.request
+import time
 from groq import Groq, APIStatusError
 from config import GROQ_API_KEY, GEMINI_API_KEY
 
@@ -109,6 +110,8 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
             print(f"      (answered by {api_used})")
             batch_results = json.loads(clean_json(raw))
             all_results.extend(batch_results)
+            if api_used == "Gemini":
+                time.sleep(5)
 
         except RuntimeError as e:
             error_msg = f"Batch {idx + 1}/{len(batches)}: {e}"
