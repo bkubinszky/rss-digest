@@ -2,19 +2,20 @@ import feedparser
 import smtplib
 import json
 import os
+import urllib.request
 from datetime import datetime, timezone, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from groq import Groq
+from groq import Groq, APIStatusError
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
 RSS_FEEDS = [
-   "https://www.trendingtopics.eu/feed/",
+    "https://www.trendingtopics.eu/feed/",
     "https://techcrunch.com/feed/",
     "https://t3n.de/rss.xml",
     "https://retail.at/feed/",
-    "https://futurezone.at/xml/rss", 
+    "https://futurezone.at/xml/rss",
     # Add as many as you like
 ]
 
@@ -36,15 +37,70 @@ I am NOT interested in:
 
 # ─── ENVIRONMENT VARIABLES ────────────────────────────────────────────────────
 
-EMAIL_FROM     = os.environ["EMAIL_FROM"]
-EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
-EMAIL_TO       = os.environ["EMAIL_TO"]
-GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
+EMAIL_FROM      = os.environ["EMAIL_FROM"]
+EMAIL_PASSWORD  = os.environ["EMAIL_PASSWORD"]
+EMAIL_TO        = os.environ["EMAIL_TO"]
+GROQ_API_KEY    = os.environ["GROQ_API_KEY"]
+GEMINI_API_KEY  = os.environ["GEMINI_API_KEY"]
+
+
+# ─── LLM CALL WITH FALLBACK ───────────────────────────────────────────────────
+
+def call_llm(prompt, label=""):
+    """Try Groq first. If rate-limited, fall back to Gemini. Returns (text, api_used) or raises."""
+
+    # — Groq —
+    try:
+        client = Groq(api_key=GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=4000,
+        )
+        return response.choices[0].message.content.strip(), "Groq"
+
+    except APIStatusError as e:
+        if e.status_code == 429:
+            print(f"      Groq rate limit hit{' (' + label + ')' if label else ''}. Falling back to Gemini...")
+        else:
+            print(f"      Groq error ({e.status_code}){' (' + label + ')' if label else ''}. Falling back to Gemini...")
+
+    except Exception as e:
+        print(f"      Groq unexpected error: {e}. Falling back to Gemini...")
+
+    # — Gemini fallback —
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        payload = json.dumps({
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4000}
+        }).encode("utf-8")
+
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        return text, "Gemini"
+
+    except Exception as e:
+        raise RuntimeError(f"Both Groq and Gemini failed: {e}")
+
+
+def clean_json(raw):
+    """Strip markdown fences from LLM JSON responses."""
+    if raw.startswith("```"):
+        parts = raw.split("```")
+        raw = parts[1] if len(parts) > 1 else raw
+        if raw.startswith("json"):
+            raw = raw[4:].strip()
+    return raw
 
 
 # ─── FETCH FEEDS ──────────────────────────────────────────────────────────────
 
-def fetch_recent_items(feeds, hours=72):
+def fetch_recent_items(feeds, hours=24):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     items = []
 
@@ -77,16 +133,15 @@ def fetch_recent_items(feeds, hours=72):
     return items
 
 
-# ─── ANALYZE WITH GROQ ────────────────────────────────────────────────────────
+# ─── ANALYZE WITH GROQ → GEMINI FALLBACK ──────────────────────────────────────
 
 def analyze_items(items, interests, batch_size=15):
     if not items:
         return []
 
-    client = Groq(api_key=GROQ_API_KEY)
     all_results = []
-
-    batches = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+    api_errors  = []
+    batches     = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
     print(f"      Processing {len(items)} items in {len(batches)} batches of up to {batch_size}...")
 
     for idx, batch in enumerate(batches):
@@ -122,39 +177,27 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
 """
 
         try:
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=4000,
-            )
-
-            raw = response.choices[0].message.content.strip()
-
-            if raw.startswith("```"):
-                parts = raw.split("```")
-                raw = parts[1] if len(parts) > 1 else raw
-                if raw.startswith("json"):
-                    raw = raw[4:].strip()
-
-            batch_results = json.loads(raw)
+            raw, api_used = call_llm(prompt, label=f"batch {idx + 1}")
+            print(f"      (answered by {api_used})")
+            batch_results = json.loads(clean_json(raw))
             all_results.extend(batch_results)
 
-        except json.JSONDecodeError as e:
-            print(f"Warning: malformed JSON in batch {idx + 1}: {e}")
-        except Exception as e:
-            print(f"Warning: batch {idx + 1} failed: {e}")
+        except RuntimeError as e:
+            error_msg = f"Batch {idx + 1}/{len(batches)}: {e}"
+            print(f"      ERROR: {error_msg}")
+            api_errors.append(error_msg)
 
-    return all_results
+        except json.JSONDecodeError as e:
+            print(f"      Warning: malformed JSON in batch {idx + 1}: {e}")
+
+    return all_results, api_errors
 
 
 # ─── DEDUPLICATE ──────────────────────────────────────────────────────────────
 
 def deduplicate_items(items):
     if not items:
-        return []
-
-    client = Groq(api_key=GROQ_API_KEY)
+        return [], []
 
     prompt = f"""You are a news editor. The list below contains news items that may include duplicates — different sources reporting on the same story.
 
@@ -184,31 +227,19 @@ Items to deduplicate:
 """
 
     try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=4000,
-        )
-
-        raw = response.choices[0].message.content.strip()
-
-        if raw.startswith("```"):
-            parts = raw.split("```")
-            raw = parts[1] if len(parts) > 1 else raw
-            if raw.startswith("json"):
-                raw = raw[4:].strip()
-
-        deduped = json.loads(raw)
+        raw, api_used = call_llm(prompt, label="deduplication")
+        print(f"      (answered by {api_used})")
+        deduped = json.loads(clean_json(raw))
         print(f"      {len(items)} items -> {len(deduped)} after deduplication.")
-        return deduped
+        return deduped, []
+
+    except RuntimeError as e:
+        print(f"      ERROR: deduplication failed: {e}")
+        return items, [f"Deduplication: {e}"]
 
     except json.JSONDecodeError as e:
-        print(f"Warning: deduplication returned malformed JSON: {e}")
-        return items
-    except Exception as e:
-        print(f"Warning: deduplication failed: {e}")
-        return items
+        print(f"      Warning: deduplication returned malformed JSON: {e}")
+        return items, []
 
 
 # ─── FORMAT HTML EMAIL ────────────────────────────────────────────────────────
@@ -293,12 +324,39 @@ def format_html_email(analyzed_items):
     return html
 
 
+def format_error_email(errors):
+    """Build an error notification email listing what went wrong."""
+    now   = datetime.now()
+    today = now.strftime("%d.%m.%Y %H:%M")
+
+    error_list = "".join(f"<li style='margin-bottom:8px;'>{e}</li>" for e in errors)
+
+    return f"""
+<html>
+<body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 24px 16px; color: #1a1a1a;">
+<h1 style="font-size: 22px; color: #c00; border-bottom: 2px solid #c00; padding-bottom: 10px;">
+  Daily Digest — Fehler aufgetreten
+</h1>
+<p style="color: #888; font-size: 13px;">{today}</p>
+<p>Der heutige Digest konnte nicht vollständig erstellt werden, weil beide APIs (Groq und Gemini) fehlgeschlagen sind.</p>
+<p><strong>Fehlermeldungen:</strong></p>
+<ul style="font-size: 14px; line-height: 1.6; color: #333;">
+  {error_list}
+</ul>
+<p style="margin-top: 24px; font-size: 13px; color: #666;">
+  Mögliche Ursachen: tägliches Token-Limit bei Groq und/oder Gemini erreicht, oder API-Key ungültig.
+  Bitte <a href="https://console.groq.com">console.groq.com</a> und 
+  <a href="https://aistudio.google.com">aistudio.google.com</a> prüfen.
+</p>
+</body></html>
+"""
+
+
 # ─── SEND EMAIL ───────────────────────────────────────────────────────────────
 
-def send_email(html_body, from_addr, to_addr, password):
-    today = datetime.now().strftime("%d.%m.%Y")
+def send_email(html_body, from_addr, to_addr, password, subject):
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Daily Digest — {today}"
+    msg["Subject"] = subject
     msg["From"]    = from_addr
     msg["To"]      = to_addr
     msg.attach(MIMEText(html_body, "html"))
@@ -314,6 +372,8 @@ def send_email(html_body, from_addr, to_addr, password):
 
 if __name__ == "__main__":
     print("=== Daily Digest ===")
+    today_str = datetime.now().strftime("%d.%m.%Y")
+    all_errors = []
 
     print("\n[1/4] RSS-Feeds abrufen...")
     items = fetch_recent_items(RSS_FEEDS, hours=24)
@@ -321,19 +381,33 @@ if __name__ == "__main__":
     if not items:
         print("Keine Artikel gefunden. Leere Zusammenfassung wird gesendet.")
         html = format_html_email([])
-        send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD)
+        send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD,
+                   subject=f"Daily Digest - {today_str}")
     else:
-        print(f"\n[2/4] {len(items)} Artikel zur Analyse an Groq senden...")
-        analyzed = analyze_items(items, YOUR_INTERESTS)
+        print(f"\n[2/4] {len(items)} Artikel zur Analyse senden...")
+        analyzed, errors = analyze_items(items, YOUR_INTERESTS)
+        all_errors.extend(errors)
+        analyzed = [i for i in analyzed if i.get("score", 0) >= 5]
         print(f"      {len(analyzed)} relevante Artikel nach dem Filtern.")
 
         print("\n[2b/4] Duplikate entfernen...")
-        analyzed = deduplicate_items(analyzed)
+        analyzed, errors = deduplicate_items(analyzed)
+        all_errors.extend(errors)
 
         print("\n[3/4] HTML-E-Mail formatieren...")
-        html = format_html_email(analyzed)
+
+        if all_errors and len(analyzed) == 0:
+            # Everything failed — send error email instead
+            print("      Alle API-Aufrufe fehlgeschlagen. Sende Fehler-E-Mail...")
+            html = format_error_email(all_errors)
+            send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD,
+                       subject=f"Daily Digest - FEHLER - {today_str}")
+        else:
+            # Partial or full success — send digest, append error note if needed
+            html = format_html_email(analyzed)
+            send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD,
+                       subject=f"Daily Digest - {today_str}")
 
         print("\n[4/4] E-Mail senden...")
-        send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD)
 
     print("\nFertig.")
