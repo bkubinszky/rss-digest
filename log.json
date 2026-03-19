@@ -23,5 +23,31 @@
       "Batch 4/6: Both Groq and Gemini failed: HTTP Error 404: Not Found",
       "Batch 5/6: Both Groq and Gemini failed: HTTP Error 404: Not Found"
     ]
+  },
+  {
+    "timestamp": "2026-03-19T16:26:10.855479Z",
+    "status": "error",
+    "items": {
+      "fetched": 77,
+      "after_filter": 0,
+      "after_dedup": 0
+    },
+    "score_distribution": {
+      "9-10": 0,
+      "7-8": 0,
+      "5-6": 0
+    },
+    "api_usage": {
+      "Groq": 0,
+      "Gemini": 0
+    },
+    "errors": [
+      "Batch 1/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests",
+      "Batch 2/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests",
+      "Batch 3/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests",
+      "Batch 4/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests",
+      "Batch 5/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests",
+      "Batch 6/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests"
+    ]
   }
 ]
