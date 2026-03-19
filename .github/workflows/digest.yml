@@ -1,0 +1,34 @@
+name: Daily RSS Digest
+
+on:
+  schedule:
+    # Runs every day at 05:00 UTC (adjust to your preferred time)
+    # Use https://crontab.guru to customize
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    # Allows you to trigger a manual run from the GitHub Actions UI
+    # Useful for testing before the first scheduled run
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install feedparser groq
+
+      - name: Run digest script
+        env:
+          GROQ_API_KEY:   ${{ secrets.GROQ_API_KEY }}
+          EMAIL_FROM:     ${{ secrets.EMAIL_FROM }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_TO:       ${{ secrets.EMAIL_TO }}
+        run: python digest.py
