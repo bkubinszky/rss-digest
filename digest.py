@@ -247,7 +247,7 @@ def format_html_email(analyzed_items):
 <body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 24px 16px; color: #1a1a1a; background: #fff;">
 
 <h1 style="font-size: 26px; border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; margin-bottom: 4px;">
-  Tägliche Zusammenfassung
+  Daily Digest
 </h1>
 <p style="color: #888; font-size: 13px; margin-top: 4px;">
   {today} &nbsp;|&nbsp; {num_items} Artikel aus {num_sources} Quelle{"n" if num_sources != 1 else ""}
@@ -298,7 +298,7 @@ def format_html_email(analyzed_items):
 def send_email(html_body, from_addr, to_addr, password):
     today = datetime.now().strftime("%d.%m.%Y")
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Tägliche Zusammenfassung — {today}"
+    msg["Subject"] = f"Daily Digest — {today}"
     msg["From"]    = from_addr
     msg["To"]      = to_addr
     msg.attach(MIMEText(html_body, "html"))
@@ -313,7 +313,7 @@ def send_email(html_body, from_addr, to_addr, password):
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("=== Tägliche Zusammenfassung ===")
+    print("=== Daily Digest ===")
 
     print("\n[1/4] RSS-Feeds abrufen...")
     items = fetch_recent_items(RSS_FEEDS, hours=24)
@@ -325,6 +325,7 @@ if __name__ == "__main__":
     else:
         print(f"\n[2/4] {len(items)} Artikel zur Analyse an Groq senden...")
         analyzed = analyze_items(items, YOUR_INTERESTS)
+        analyzed = [i for i in analyzed if i.get("score", 0) >= 5]
         print(f"      {len(analyzed)} relevante Artikel nach dem Filtern.")
 
         print("\n[2b/4] Duplikate entfernen...")
