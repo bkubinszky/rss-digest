@@ -1,4 +1,4 @@
-# Daily Digest
+# Daily Digest v2
 
 A fully automated, free daily newsletter that fetches RSS feeds, filters and summarizes articles using AI, and delivers a clean digest to your inbox every morning.
 
@@ -9,6 +9,26 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sum
 - Merges duplicate stories from different sources into a single entry with multiple links
 - Sorts articles by relevance score (highest first) and drops anything below 5/10
 - Delivers a formatted HTML email daily
+- Automatically falls back to Gemini if Groq hits its daily token limit
+- Sends a clear error email if both APIs fail — no more silent empty digests
+- Writes a structured run log to `log.json` after every run
+
+## File structure
+
+```
+rss-digest/
+├── digest.py        # Main orchestrator — runs the pipeline
+├── config.py        # Your feeds, interests, and credentials (via env vars)
+├── fetcher.py       # RSS feed fetching
+├── analyzer.py      # LLM calls (Groq + Gemini fallback), filtering, scoring, summarizing
+├── deduplicator.py  # Merges duplicate stories from different sources
+├── mailer.py        # HTML email formatting and sending
+├── logger.py        # Run logging to log.json
+├── log.json         # Auto-generated run history (committed by Actions bot)
+└── .github/
+    └── workflows/
+        └── digest.yml  # GitHub Actions schedule and workflow
+```
 
 ## Stack
 
@@ -19,7 +39,7 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sum
 | Fallback LLM | Google Gemini 1.5 Flash (free tier) |
 | Email delivery | Gmail SMTP |
 
-If Groq hits its daily token limit, the script automatically retries with Gemini. If both fail, you receive an error email with a clear explanation instead of a silent empty digest.
+If Groq hits its daily token limit, the script automatically retries with Gemini. If both fail, you receive a descriptive error email instead of a silent empty digest.
 
 ## Setup
 
@@ -31,7 +51,7 @@ If Groq hits its daily token limit, the script automatically retries with Gemini
 
 ### 2. GitHub Secrets
 
-Add the following secrets to your repo under Settings → Secrets and variables → Actions:
+Add the following secrets under Settings → Secrets and variables → Actions:
 
 | Secret | Value |
 |---|---|
@@ -41,9 +61,13 @@ Add the following secrets to your repo under Settings → Secrets and variables 
 | `EMAIL_PASSWORD` | Your 16-character Gmail App Password |
 | `EMAIL_TO` | Destination email address |
 
-### 3. Configure the script
+### 3. GitHub Actions permissions
 
-In `digest.py`, edit two sections:
+Go to Settings → Actions → General → Workflow permissions and set to **Read and write permissions**. This is required for the Actions bot to commit `log.json` after each run.
+
+### 4. Configure the script
+
+In `config.py`, edit two sections:
 
 **Your feeds:**
 ```python
@@ -61,21 +85,38 @@ I am NOT interested in: ...
 """
 ```
 
-The interests block is plain English — the more specific you are, the better the filtering.
+The interests block is plain English — the more specific you are, the better the filtering and scoring will be.
 
-### 4. Schedule
+### 5. Schedule
 
-The digest runs daily at 05:00 UTC. To change the time, edit the cron line in `.github/workflows/digest.yml`:
+The digest runs daily at 07:00 UTC. To change the time, edit the cron line in `.github/workflows/digest.yml`:
 
 ```yaml
-- cron: '0 5 * * *'
+- cron: '0 7 * * *'
 ```
 
 Use [crontab.guru](https://crontab.guru) to customize.
 
 ## Manual test run
 
-Go to Actions → Daily RSS Digest → Run workflow. Check the logs for any errors.
+Go to Actions → Daily RSS Digest → Run workflow. Check the logs for any errors. Avoid running multiple manual tests in a single day — each run consumes roughly 20,000–25,000 Groq tokens and you may hit the daily limit before the scheduled run.
+
+## Run log
+
+After each run, `log.json` is automatically updated and committed to the repo by the Actions bot. Each entry looks like this:
+
+```json
+{
+  "timestamp": "2026-03-19T07:01:23Z",
+  "status": "success",
+  "items": { "fetched": 68, "after_filter": 21, "after_dedup": 18 },
+  "score_distribution": { "9-10": 3, "7-8": 9, "5-6": 6 },
+  "api_usage": { "Groq": 5, "Gemini": 0 },
+  "errors": []
+}
+```
+
+`status` is one of `success`, `partial` (some batches failed but a digest was still sent), or `error` (all API calls failed, error email sent).
 
 ## Free tier limits
 
@@ -84,4 +125,21 @@ Go to Actions → Daily RSS Digest → Run workflow. Check the logs for any erro
 | Groq (free) | 100,000 tokens/day |
 | Gemini 1.5 Flash (free) | 1,500 requests/day |
 
-A single daily run consumes roughly 20,000-25,000 Groq tokens. Both limits are well within range for normal use. Avoid running multiple manual tests in a single day to prevent hitting the Groq limit before the scheduled run.
+A single daily run consumes roughly 20,000–25,000 Groq tokens. Both limits are well within range for normal use.
+
+## Changelog
+
+### v2
+- Refactored into modular file structure (`config`, `fetcher`, `analyzer`, `deduplicator`, `mailer`, `logger`)
+- Added Gemini API as automatic fallback when Groq rate limit is hit
+- Added descriptive error email when both APIs fail
+- Added run logging to `log.json`, committed automatically after each run
+- Reduced feed summary truncation from 600 to 300 characters to lower token usage
+- Articles scoring below 5/10 are excluded from the digest
+
+### v1
+- Single-file implementation
+- Groq-only LLM with batched processing
+- Gmail SMTP delivery
+- German-language output with title translation
+- Deduplication with merged source links
