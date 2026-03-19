@@ -44,7 +44,7 @@ GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
 
 # ─── FETCH FEEDS ──────────────────────────────────────────────────────────────
 
-def fetch_recent_items(feeds, hours=24):
+def fetch_recent_items(feeds, hours=72):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     items = []
 
@@ -229,7 +229,7 @@ def format_html_email(analyzed_items):
     if not analyzed_items:
         return f"""
 <html><body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 24px; color: #222;">
-<h1 style="border-bottom: 2px solid #222; padding-bottom: 8px;">Tägliche Zusammenfassung</h1>
+<h1 style="border-bottom: 2px solid #222; padding-bottom: 8px;">Daily Digest</h1>
 <p style="color: #666;">{today}</p>
 <p>Heute keine relevanten Artikel gefunden. Genieß die Stille.</p>
 </body></html>
