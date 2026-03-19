@@ -22,6 +22,7 @@ RSS_FEEDS = [
 # This is your main lever. Be specific — the more precise you are,
 # the better the filtering and scoring will be.
 YOUR_INTERESTS = """
+The digest must be written entirely in German, regardless of the original language of the articles. This includes all summaries, topic group names, and any other text you generate. Translate and summarize into German.
 I'm interested in:
 - AI and technology, especially LLMs, AI agents, agentic commerce, developer tools
 - European and Central European politics (Austria, Hungary, EU institutions)
