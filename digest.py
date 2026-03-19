@@ -155,7 +155,73 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
             print(f"Warning: batch {idx + 1} failed: {e}")
  
     return all_results
-    
+
+
+# ── DEDUPLICATE ITEMS ────────────────────────────────────────
+ 
+def deduplicate_items(items):
+    """Merge items covering the same story into one entry with multiple links."""
+    if not items:
+        return []
+ 
+    client = Groq(api_key=GROQ_API_KEY)
+ 
+    prompt = f"""You are a news editor. The list below contains news items that may include duplicates — different sources reporting on the same story.
+ 
+Your task:
+1. Identify items that cover the same story or event.
+2. Merge them into a single item, keeping the best summary (rewrite if needed to reflect all sources).
+3. Collect ALL links from the merged items into a "links" array, each with a "source" and "url" field.
+4. For non-duplicate items, still wrap the single link in the same "links" array format.
+5. Keep the highest score among merged items.
+6. Keep the topic of the merged items (they should be the same).
+ 
+Return ONLY a valid JSON array. No preamble, no markdown fences.
+ 
+[
+  {{
+    "title": "Article title (translated to German)",
+    "topic": "Topic group",
+    "score": 8,
+    "summary": "Merged or original summary in German.",
+    "links": [
+      {{"source": "Feed Source Name", "url": "https://..."}},
+      {{"source": "Another Source", "url": "https://..."}}
+    ]
+  }}
+]
+ 
+Items to deduplicate:
+{json.dumps(items, ensure_ascii=False, indent=2)}
+"""
+ 
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=4000,
+        )
+ 
+        raw = response.choices[0].message.content.strip()
+ 
+        if raw.startswith("```"):
+            parts = raw.split("```")
+            raw = parts[1] if len(parts) > 1 else raw
+            if raw.startswith("json"):
+                raw = raw[4:].strip()
+ 
+        deduped = json.loads(raw)
+        print(f"      {len(items)} items → {len(deduped)} after deduplication.")
+        return deduped
+ 
+    except json.JSONDecodeError as e:
+        print(f"Warning: deduplication returned malformed JSON: {e}")
+        return items  # fall back to original if it fails
+    except Exception as e:
+        print(f"Warning: deduplication failed: {e}")
+        return items  # fall back to original if it fails
+
 
 # ─── FORMAT HTML EMAIL ────────────────────────────────────────────────────────
 
@@ -229,10 +295,14 @@ def format_html_email(analyzed_items):
   </tr></table>
   <div style="font-size: 11px; color: #999; margin: 4px 0 8px 0;">{source}</div>
   <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #333;">{summary}</p>
-  <a href="{link}" style="display: inline-block; margin-top: 10px; font-size: 12px;
-                          color: #555; text-decoration: none;">
-    Read original &rarr;
-  </a>
+  <div style="margin-top: 10px;">
+    {"".join(
+      f'<a href="{l.get("url","#")}" style="display: inline-block; margin-right: 12px; '
+      f'font-size: 12px; color: #555; text-decoration: none;">'
+      f'{l.get("source","Quelle")} &rarr;</a>'
+      for l in item.get("links", [{"source": item.get("source",""), "url": item.get("link","#")}])
+    )}
+  </div>
 </div>
 """
 
@@ -280,6 +350,8 @@ if __name__ == "__main__":
         print(f"\n[2/4] Sending {len(items)} items to Groq for analysis...")
         analyzed = analyze_items(items, YOUR_INTERESTS)
         print(f"      {len(analyzed)} relevant items after filtering.")
+        print("\n[2b/4] Deduplicating items...")
+        analyzed = deduplicate_items(analyzed)
 
         print("\n[3/4] Formatting HTML email...")
         html = format_html_email(analyzed)
