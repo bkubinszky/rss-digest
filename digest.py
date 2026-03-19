@@ -10,8 +10,11 @@ from groq import Groq
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
 
 RSS_FEEDS = [
-    "https://example.com/feed1.xml",
-    "https://example.com/feed2.xml",
+   "https://www.trendingtopics.eu/feed/",
+    "https://techcrunch.com/feed/",
+    "https://t3n.de/rss.xml",
+    "https://retail.at/feed/",
+    "https://futurezone.at/xml/rss", 
     # Add as many as you like
 ]
 
