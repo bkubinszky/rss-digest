@@ -8,29 +8,22 @@ from email.mime.text import MIMEText
 from groq import Groq
 
 # ─── CONFIG ───────────────────────────────────────────────────────────────────
-# Add or remove feeds here
 
 RSS_FEEDS = [
-    "https://www.trendingtopics.eu/feed/",
-    "https://techcrunch.com/feed/",
-    "https://t3n.de/rss.xml",
-    "https://retail.at/feed/",
-    "https://futurezone.at/xml/rss", 
+    "https://example.com/feed1.xml",
+    "https://example.com/feed2.xml",
     # Add as many as you like
 ]
 
-# This is your main lever. Be specific — the more precise you are,
-# the better the filtering and scoring will be.
 YOUR_INTERESTS = """
-The digest must be written entirely in German, regardless of the original language of the articles. This includes all summaries, topic group names, and article titles. Translate everything into German.
+The digest must be written entirely in German, regardless of the original language of the articles.
+This includes all summaries and article titles. Translate everything into German.
+
 I'm interested in:
-- AI and technology, especially LLMs, AI agents, agentic commerce, developer tools
+- AI and technology, especially LLMs, AI agents, inference hardware (GPUs, LPUs), and developer tools
 - European and Central European politics (Austria, Hungary, EU institutions)
-- Investing, fintech, and SaaS (stocks, prediction markets, real estate investment tools, crypto)
-- For investing, focus on European and global markets, US-domestic markets only if strong implications for the rest of the world
+- Investing, fintech, and SaaS (stocks, prediction markets, real estate investment tools)
 - Business strategy, product management, and no-code/low-code tools
-- Business ideas and news relevant to early-stage SaaS or solo founders
-- Keep summaries concise and neutral, no hype
 
 I am NOT interested in:
 - Sports, celebrity gossip, entertainment news
@@ -38,17 +31,17 @@ I am NOT interested in:
 - US domestic politics unless it has strong EU or global market implications
 """
 
-# ─── ENVIRONMENT VARIABLES (set these as GitHub Secrets) ──────────────────────
-EMAIL_FROM     = os.environ["EMAIL_FROM"]       # your Gmail address
-EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]   # your Gmail App Password (not your real password)
-EMAIL_TO       = os.environ["EMAIL_TO"]         # where to send the digest (can be same as FROM)
+# ─── ENVIRONMENT VARIABLES ────────────────────────────────────────────────────
+
+EMAIL_FROM     = os.environ["EMAIL_FROM"]
+EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
+EMAIL_TO       = os.environ["EMAIL_TO"]
 GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
 
 
 # ─── FETCH FEEDS ──────────────────────────────────────────────────────────────
 
 def fetch_recent_items(feeds, hours=24):
-    """Fetch all feed entries published within the last N hours."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     items = []
 
@@ -65,12 +58,11 @@ def fetch_recent_items(feeds, hours=24):
                     except Exception:
                         pass
 
-                # Include if within cutoff, or if no date info is available
                 if published is None or published >= cutoff:
                     items.append({
                         "title":     entry.get("title", "No title"),
                         "link":      entry.get("link", ""),
-                        "summary":   entry.get("summary", "")[:600],  # truncate to save tokens
+                        "summary":   entry.get("summary", "")[:600],
                         "published": published.isoformat() if published else "unknown",
                         "source":    source_name,
                     })
@@ -85,50 +77,47 @@ def fetch_recent_items(feeds, hours=24):
 # ─── ANALYZE WITH GROQ ────────────────────────────────────────────────────────
 
 def analyze_items(items, interests, batch_size=15):
-    """Send items to Groq in batches to stay within token limits."""
     if not items:
         return []
- 
+
     client = Groq(api_key=GROQ_API_KEY)
     all_results = []
- 
-    # Split items into chunks of batch_size
+
     batches = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
     print(f"      Processing {len(items)} items in {len(batches)} batches of up to {batch_size}...")
- 
+
     for idx, batch in enumerate(batches):
         print(f"      Batch {idx + 1}/{len(batches)}...")
- 
+
         prompt = f"""You are a precise and opinionated news curator. Analyze the RSS feed items below and produce a structured daily digest.
- 
+
 ## My interests and filters:
 {interests}
- 
+
 ## Your tasks:
-1. **Filter**: Discard any item that is not clearly relevant to my interests. Be strict — tangential or generic items should be excluded.
-2. **Score**: Assign each remaining item a relevance score from 1 to 10 (10 = extremely relevant and interesting to me).
-3. **Group**: Assign each item to a descriptive topic group. Invent sensible groups based on what's present (e.g. "AI & Developer Tools", "European Politics", "Investing & Markets"). Use 2-6 groups max.
-4. **Summarize**: Write a concise 1-2 sentence summary of each item in plain English. Do not copy the original text — paraphrase and add context if helpful.
+1. **Filter**: Discard any item that is not clearly relevant to my interests. Be strict.
+2. **Score**: Assign each remaining item a relevance score from 1 to 10.
+3. **Summarize**: Write a concise 1-2 sentence summary in German. Do not copy the original text.
+4. **Translate**: Translate the article title into German.
 5. **Link**: Preserve the original URL.
- 
+
 ## Output format:
 Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fences.
- 
+
 [
   {{
-    "title": "Original article title",
+    "title": "Article title translated into German",
     "source": "Feed source name",
     "link": "https://...",
-    "topic": "Topic Group Name",
     "score": 8,
-    "summary": "Your 1-2 sentence summary here."
+    "summary": "1-2 sentence summary in German."
   }}
 ]
- 
+
 ## Items to analyze:
 {json.dumps(batch, ensure_ascii=False, indent=2)}
 """
- 
+
         try:
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
@@ -136,52 +125,48 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
                 temperature=0.2,
                 max_tokens=4000,
             )
- 
+
             raw = response.choices[0].message.content.strip()
- 
-            # Strip markdown fences if the model adds them anyway
+
             if raw.startswith("```"):
                 parts = raw.split("```")
                 raw = parts[1] if len(parts) > 1 else raw
                 if raw.startswith("json"):
                     raw = raw[4:].strip()
- 
+
             batch_results = json.loads(raw)
             all_results.extend(batch_results)
- 
+
         except json.JSONDecodeError as e:
             print(f"Warning: malformed JSON in batch {idx + 1}: {e}")
         except Exception as e:
             print(f"Warning: batch {idx + 1} failed: {e}")
- 
+
     return all_results
 
 
-# ── DEDUPLICATE ITEMS ────────────────────────────────────────
- 
+# ─── DEDUPLICATE ──────────────────────────────────────────────────────────────
+
 def deduplicate_items(items):
-    """Merge items covering the same story into one entry with multiple links."""
     if not items:
         return []
- 
+
     client = Groq(api_key=GROQ_API_KEY)
- 
+
     prompt = f"""You are a news editor. The list below contains news items that may include duplicates — different sources reporting on the same story.
- 
+
 Your task:
 1. Identify items that cover the same story or event.
-2. Merge them into a single item, keeping the best summary (rewrite if needed to reflect all sources).
+2. Merge them into a single item, keeping the best summary (in German).
 3. Collect ALL links from the merged items into a "links" array, each with a "source" and "url" field.
 4. For non-duplicate items, still wrap the single link in the same "links" array format.
 5. Keep the highest score among merged items.
-6. Keep the topic of the merged items (they should be the same).
- 
+
 Return ONLY a valid JSON array. No preamble, no markdown fences.
- 
+
 [
   {{
-    "title": "Article title (translated to German)",
-    "topic": "Topic group",
+    "title": "Article title in German",
     "score": 8,
     "summary": "Merged or original summary in German.",
     "links": [
@@ -190,11 +175,11 @@ Return ONLY a valid JSON array. No preamble, no markdown fences.
     ]
   }}
 ]
- 
+
 Items to deduplicate:
 {json.dumps(items, ensure_ascii=False, indent=2)}
 """
- 
+
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -202,114 +187,103 @@ Items to deduplicate:
             temperature=0.2,
             max_tokens=4000,
         )
- 
+
         raw = response.choices[0].message.content.strip()
- 
+
         if raw.startswith("```"):
             parts = raw.split("```")
             raw = parts[1] if len(parts) > 1 else raw
             if raw.startswith("json"):
                 raw = raw[4:].strip()
- 
+
         deduped = json.loads(raw)
-        print(f"      {len(items)} items → {len(deduped)} after deduplication.")
+        print(f"      {len(items)} items -> {len(deduped)} after deduplication.")
         return deduped
- 
+
     except json.JSONDecodeError as e:
         print(f"Warning: deduplication returned malformed JSON: {e}")
-        return items  # fall back to original if it fails
+        return items
     except Exception as e:
         print(f"Warning: deduplication failed: {e}")
-        return items  # fall back to original if it fails
+        return items
 
 
 # ─── FORMAT HTML EMAIL ────────────────────────────────────────────────────────
 
 def format_html_email(analyzed_items):
-    """Build a clean HTML email from the analyzed and grouped items."""
-    DAYS_DE = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
+    DAYS_DE   = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
     MONTHS_DE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"]
-    now = datetime.now()
+    now   = datetime.now()
     today = f"{DAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}"
-    num_items = len(analyzed_items)
-    num_sources = len(set(i.get("source", "") for i in analyzed_items))
+
+    num_items   = len(analyzed_items)
+    num_sources = len(set(
+        l.get("source", "")
+        for item in analyzed_items
+        for l in item.get("links", [{"source": item.get("source", "")}])
+    ))
 
     if not analyzed_items:
         return f"""
 <html><body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 24px; color: #222;">
-<h1 style="border-bottom: 2px solid #222; padding-bottom: 8px;">Daily Digest</h1>
+<h1 style="border-bottom: 2px solid #222; padding-bottom: 8px;">Tägliche Zusammenfassung</h1>
 <p style="color: #666;">{today}</p>
-<p>Nothing relevant found in the last 24 hours. Enjoy the silence.</p>
+<p>Heute keine relevanten Artikel gefunden. Genieß die Stille.</p>
 </body></html>
 """
 
-    # Group by topic, sort by score descending within each group
-    topics = {}
-    for item in analyzed_items:
-        topic = item.get("topic", "General")
-        topics.setdefault(topic, []).append(item)
-    for topic in topics:
-        topics[topic].sort(key=lambda x: x.get("score", 0), reverse=True)
+    sorted_items = sorted(analyzed_items, key=lambda x: x.get("score", 0), reverse=True)
+
+    def score_color(s):
+        if s >= 7: return "#2a7a2a"
+        if s >= 4: return "#b05c00"
+        return "#888888"
 
     html = f"""
 <html>
 <body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 24px 16px; color: #1a1a1a; background: #fff;">
 
 <h1 style="font-size: 26px; border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; margin-bottom: 4px;">
-  Daily Digest
+  Tägliche Zusammenfassung
 </h1>
 <p style="color: #888; font-size: 13px; margin-top: 4px;">
   {today} &nbsp;|&nbsp; {num_items} Artikel aus {num_sources} Quelle{"n" if num_sources != 1 else ""}
 </p>
 """
 
-    score_color_map = lambda s: "#2a7a2a" if s >= 7 else "#b05c00" if s >= 4 else "#888888"
+    for item in sorted_items:
+        score   = item.get("score", 0)
+        title   = item.get("title", "Kein Titel")
+        summary = item.get("summary", "")
+        links   = item.get("links", [{"source": item.get("source", "Quelle"), "url": item.get("link", "#")}])
+        color   = score_color(score)
 
-    for topic in sorted(topics.keys()):
-        items = topics[topic]
+        link_html = " &nbsp; ".join(
+            f'<a href="{l.get("url","#")}" style="font-size: 12px; color: #555; text-decoration: none;">'
+            f'{l.get("source","Quelle")} &rarr;</a>'
+            for l in links
+        )
+
         html += f"""
-<h2 style="font-size: 18px; color: #1a1a1a; margin-top: 36px; margin-bottom: 12px;
-           border-left: 4px solid #444; padding-left: 12px;">
-  {topic}
-</h2>
-"""
-        for item in items:
-            score = item.get("score", 0)
-            color = score_color_map(score)
-            title = item.get("title", "Untitled")
-            link = item.get("link", "#")
-            source = item.get("source", "")
-            summary = item.get("summary", "")
-
-            html += f"""
 <div style="margin-bottom: 18px; padding: 14px 16px; background: #f7f7f7;
             border-radius: 6px; border: 1px solid #e8e8e8;">
   <table width="100%" cellpadding="0" cellspacing="0"><tr>
     <td style="vertical-align: top;">
-      <a href="{link}" style="font-size: 15px; font-weight: bold; color: #1a1a8c;
-                              text-decoration: none; line-height: 1.4;">{title}</a>
+      <span style="font-size: 15px; font-weight: bold; color: #1a1a1a; line-height: 1.4;">{title}</span>
     </td>
     <td style="vertical-align: top; text-align: right; white-space: nowrap; padding-left: 12px;">
       <span style="color: {color}; font-weight: bold; font-size: 13px;">{score}/10</span>
     </td>
   </tr></table>
-  <div style="font-size: 11px; color: #999; margin: 4px 0 8px 0;">{source}</div>
-  <p style="margin: 0; font-size: 14px; line-height: 1.55; color: #333;">{summary}</p>
-  <div style="margin-top: 10px;">
-    {"".join(
-      f'<a href="{l.get("url","#")}" style="display: inline-block; margin-right: 12px; '
-      f'font-size: 12px; color: #555; text-decoration: none;">'
-      f'{l.get("source","Quelle")} &rarr;</a>'
-      for l in item.get("links", [{"source": item.get("source",""), "url": item.get("link","#")}])
-    )}
-  </div>
+  <p style="margin: 8px 0 10px 0; font-size: 14px; line-height: 1.55; color: #333;">{summary}</p>
+  <div>{link_html}</div>
 </div>
 """
 
     html += """
 <hr style="border: none; border-top: 1px solid #ddd; margin-top: 40px;">
 <p style="font-size: 11px; color: #bbb; text-align: center;">
-  Generated by your RSS digest script. Powered by Groq + GitHub Actions.
+  Automatisch erstellt mit Groq &amp; GitHub Actions.
 </p>
 </body></html>
 """
@@ -319,10 +293,9 @@ def format_html_email(analyzed_items):
 # ─── SEND EMAIL ───────────────────────────────────────────────────────────────
 
 def send_email(html_body, from_addr, to_addr, password):
-    """Send the digest via Gmail SMTP using SSL."""
-    today = datetime.now().strftime("%b %d, %Y")
+    today = datetime.now().strftime("%d.%m.%Y")
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Daily Digest — {today}"
+    msg["Subject"] = f"Tägliche Zusammenfassung — {today}"
     msg["From"]    = from_addr
     msg["To"]      = to_addr
     msg.attach(MIMEText(html_body, "html"))
@@ -331,32 +304,33 @@ def send_email(html_body, from_addr, to_addr, password):
         server.login(from_addr, password)
         server.sendmail(from_addr, to_addr, msg.as_string())
 
-    print(f"Email sent to {to_addr}.")
+    print(f"E-Mail gesendet an {to_addr}.")
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("=== Daily Digest Runner ===")
+    print("=== Tägliche Zusammenfassung ===")
 
-    print("\n[1/4] Fetching RSS feeds...")
+    print("\n[1/4] RSS-Feeds abrufen...")
     items = fetch_recent_items(RSS_FEEDS, hours=24)
 
     if not items:
-        print("No items found. Sending empty digest.")
+        print("Keine Artikel gefunden. Leere Zusammenfassung wird gesendet.")
         html = format_html_email([])
         send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD)
     else:
-        print(f"\n[2/4] Sending {len(items)} items to Groq for analysis...")
+        print(f"\n[2/4] {len(items)} Artikel zur Analyse an Groq senden...")
         analyzed = analyze_items(items, YOUR_INTERESTS)
-        print(f"      {len(analyzed)} relevant items after filtering.")
-        print("\n[2b/4] Deduplicating items...")
+        print(f"      {len(analyzed)} relevante Artikel nach dem Filtern.")
+
+        print("\n[2b/4] Duplikate entfernen...")
         analyzed = deduplicate_items(analyzed)
 
-        print("\n[3/4] Formatting HTML email...")
+        print("\n[3/4] HTML-E-Mail formatieren...")
         html = format_html_email(analyzed)
 
-        print("\n[4/4] Sending email...")
+        print("\n[4/4] E-Mail senden...")
         send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD)
 
-    print("\nDone.")
+    print("\nFertig.")
