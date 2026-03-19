@@ -325,7 +325,6 @@ if __name__ == "__main__":
     else:
         print(f"\n[2/4] {len(items)} Artikel zur Analyse an Groq senden...")
         analyzed = analyze_items(items, YOUR_INTERESTS)
-        analyzed = [i for i in analyzed if i.get("score", 0) >= 5]
         print(f"      {len(analyzed)} relevante Artikel nach dem Filtern.")
 
         print("\n[2b/4] Duplikate entfernen...")
