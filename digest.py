@@ -11,8 +11,11 @@ from groq import Groq
 # Add or remove feeds here
 
 RSS_FEEDS = [
-    "https://example.com/feed1.xml",
-    "https://example.com/feed2.xml",
+    "https://www.trendingtopics.eu/feed/",
+    "https://techcrunch.com/feed/",
+    "https://t3n.de/rss.xml",
+    "https://retail.at/feed/",
+    "https://futurezone.at/xml/rss", 
     # Add as many as you like
 ]
 
@@ -20,10 +23,13 @@ RSS_FEEDS = [
 # the better the filtering and scoring will be.
 YOUR_INTERESTS = """
 I'm interested in:
-- AI and technology, especially LLMs, AI agents, inference hardware (GPUs, LPUs), and developer tools
+- AI and technology, especially LLMs, AI agents, agentic commerce, developer tools
 - European and Central European politics (Austria, Hungary, EU institutions)
-- Investing, fintech, and SaaS (stocks, prediction markets, real estate investment tools)
+- Investing, fintech, and SaaS (stocks, prediction markets, real estate investment tools, crypto)
+- For investing, focus on European and global markets, US-domestic markets only if strong implications for the rest of the world
 - Business strategy, product management, and no-code/low-code tools
+- Business ideas and news relevant to early-stage SaaS or solo founders
+- Keep summaries concise and neutral, no hype
 
 I am NOT interested in:
 - Sports, celebrity gossip, entertainment news
