@@ -83,28 +83,36 @@ def fetch_recent_items(feeds, hours=24):
 
 # ─── ANALYZE WITH GROQ ────────────────────────────────────────────────────────
 
-def analyze_items(items, interests):
-    """Send items to Groq for filtering, scoring, grouping, and summarizing."""
+def analyze_items(items, interests, batch_size=15):
+    """Send items to Groq in batches to stay within token limits."""
     if not items:
         return []
-
+ 
     client = Groq(api_key=GROQ_API_KEY)
-
-    prompt = f"""You are a precise and opinionated news curator. Analyze the RSS feed items below and produce a structured daily digest.
-
+    all_results = []
+ 
+    # Split items into chunks of batch_size
+    batches = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+    print(f"      Processing {len(items)} items in {len(batches)} batches of up to {batch_size}...")
+ 
+    for idx, batch in enumerate(batches):
+        print(f"      Batch {idx + 1}/{len(batches)}...")
+ 
+        prompt = f"""You are a precise and opinionated news curator. Analyze the RSS feed items below and produce a structured daily digest.
+ 
 ## My interests and filters:
 {interests}
-
+ 
 ## Your tasks:
 1. **Filter**: Discard any item that is not clearly relevant to my interests. Be strict — tangential or generic items should be excluded.
 2. **Score**: Assign each remaining item a relevance score from 1 to 10 (10 = extremely relevant and interesting to me).
 3. **Group**: Assign each item to a descriptive topic group. Invent sensible groups based on what's present (e.g. "AI & Developer Tools", "European Politics", "Investing & Markets"). Use 2-6 groups max.
 4. **Summarize**: Write a concise 1-2 sentence summary of each item in plain English. Do not copy the original text — paraphrase and add context if helpful.
 5. **Link**: Preserve the original URL.
-
+ 
 ## Output format:
 Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fences.
-
+ 
 [
   {{
     "title": "Original article title",
@@ -115,34 +123,38 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
     "summary": "Your 1-2 sentence summary here."
   }}
 ]
-
+ 
 ## Items to analyze:
-{json.dumps(items, ensure_ascii=False, indent=2)}
+{json.dumps(batch, ensure_ascii=False, indent=2)}
 """
-
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.2,
-        max_tokens=4000,
-    )
-
-    raw = response.choices[0].message.content.strip()
-
-    # Strip markdown fences if the model adds them anyway
-    if raw.startswith("```"):
-        parts = raw.split("```")
-        raw = parts[1] if len(parts) > 1 else raw
-        if raw.startswith("json"):
-            raw = raw[4:].strip()
-
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        print(f"Error: Groq returned malformed JSON: {e}")
-        print("Raw response:", raw[:500])
-        return []
-
+ 
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=4000,
+            )
+ 
+            raw = response.choices[0].message.content.strip()
+ 
+            # Strip markdown fences if the model adds them anyway
+            if raw.startswith("```"):
+                parts = raw.split("```")
+                raw = parts[1] if len(parts) > 1 else raw
+                if raw.startswith("json"):
+                    raw = raw[4:].strip()
+ 
+            batch_results = json.loads(raw)
+            all_results.extend(batch_results)
+ 
+        except json.JSONDecodeError as e:
+            print(f"Warning: malformed JSON in batch {idx + 1}: {e}")
+        except Exception as e:
+            print(f"Warning: batch {idx + 1} failed: {e}")
+ 
+    return all_results
+    
 
 # ─── FORMAT HTML EMAIL ────────────────────────────────────────────────────────
 
