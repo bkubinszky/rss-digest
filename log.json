@@ -144,5 +144,26 @@
       "Gemini": 0
     },
     "errors": []
+  },
+  {
+    "timestamp": "2026-03-20T08:16:06.888615Z",
+    "status": "partial",
+    "items": {
+      "fetched": 80,
+      "after_filter": 38,
+      "after_dedup": 38
+    },
+    "score_distribution": {
+      "9-10": 8,
+      "7-8": 22,
+      "5-6": 8
+    },
+    "api_usage": {
+      "Groq": 6,
+      "Gemini": 0
+    },
+    "errors": [
+      "Deduplication: Both Groq and Gemini failed after 3 attempts each."
+    ]
   }
 ]
