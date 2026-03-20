@@ -172,8 +172,6 @@ Tracks consecutive fetch failures per feed in `feed_health.json`. After 3 consec
 ### Visibility
 - "First seen" indicator — flag articles from sources that rarely appear in the digest
 
-### Configuration
-- Move `YOUR_INTERESTS` to a separate `interests.md` file — easier to edit in GitHub without touching Python
 
 ---
 
