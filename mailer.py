@@ -2,6 +2,7 @@ import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from config import MOCK_MODE
 
 
 def format_html_email(analyzed_items):
@@ -18,11 +19,21 @@ def format_html_email(analyzed_items):
         for l in item.get("links", [{"source": item.get("source", "")}])
     ))
 
+    mock_banner = ""
+    if MOCK_MODE:
+        mock_banner = """
+<div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px;
+            padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #856404;">
+  &#9888;&#65039; MOCK MODE — Diese Ausgabe enthält Testdaten. Kein echter Inhalt.
+</div>
+"""
+
     if not analyzed_items:
         return f"""
 <html><body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 24px; color: #222;">
 <h1 style="border-bottom: 2px solid #222; padding-bottom: 8px;">Daily Digest</h1>
 <p style="color: #666;">{today}</p>
+{mock_banner}
 <p>Heute keine relevanten Artikel gefunden. Genieß die Stille.</p>
 </body></html>
 """
@@ -44,6 +55,7 @@ def format_html_email(analyzed_items):
 <p style="color: #888; font-size: 13px; margin-top: 4px;">
   {today} &nbsp;|&nbsp; {num_items} Artikel aus {num_sources} Quelle{"n" if num_sources != 1 else ""}
 </p>
+{mock_banner}
 """
 
     for item in sorted_items:
