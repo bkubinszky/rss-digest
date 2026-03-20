@@ -4,6 +4,7 @@ from analyzer import analyze_items
 from deduplicator import deduplicate_items
 from mailer import format_html_email, format_error_email, send_email
 from logger import build_log_entry, write_log
+from health import update_feed_health
 from datetime import datetime
 
 
@@ -14,20 +15,26 @@ if __name__ == "__main__":
     api_usage  = {"Groq": 0, "Gemini": 0}
 
     # ── 1. Fetch ──────────────────────────────────────────────────────────────
-    print("\n[1/4] RSS-Feeds abrufen...")
-    items = fetch_recent_items(RSS_FEEDS, hours=24)
+    print("\n[1/5] RSS-Feeds abrufen...")
+    items, feed_statuses = fetch_recent_items(RSS_FEEDS, hours=24)
     fetched_count = len(items)
+
+    # ── 2. Feed health check ──────────────────────────────────────────────────
+    print("\n[2/5] Feed-Gesundheit prüfen...")
+    feed_warnings = update_feed_health(feed_statuses)
+    if feed_warnings:
+        print(f"      {len(feed_warnings)} Feed(s) haben den Fehlerschwellenwert erreicht.")
 
     if not fetched_count:
         print("Keine Artikel gefunden. Leere Zusammenfassung wird gesendet.")
-        html = format_html_email([])
+        html = format_html_email([], feed_warnings=feed_warnings)
         send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD,
                    subject=f"Daily Digest - {today_str}")
         write_log(build_log_entry(0, 0, 0, [], api_usage, [], "success"))
 
     else:
-        # ── 2. Analyze ────────────────────────────────────────────────────────
-        print(f"\n[2/4] {fetched_count} Artikel zur Analyse senden...")
+        # ── 3. Analyze ────────────────────────────────────────────────────────
+        print(f"\n[3/5] {fetched_count} Artikel zur Analyse senden...")
         analyzed, errors, batch_usage = analyze_items(items, YOUR_INTERESTS)
         all_errors.extend(errors)
         for api, count in batch_usage.items():
@@ -37,14 +44,14 @@ if __name__ == "__main__":
         filtered_count = len(analyzed)
         print(f"      {filtered_count} relevante Artikel nach dem Filtern.")
 
-        # ── 2b. Deduplicate ───────────────────────────────────────────────────
-        print("\n[2b/4] Duplikate entfernen...")
+        # ── 4. Deduplicate ────────────────────────────────────────────────────
+        print("\n[4/5] Duplikate entfernen...")
         analyzed, errors = deduplicate_items(analyzed)
         all_errors.extend(errors)
         deduped_count = len(analyzed)
 
-        # ── 3. Format ─────────────────────────────────────────────────────────
-        print("\n[3/4] HTML-E-Mail formatieren...")
+        # ── 5. Format + Send + Log ────────────────────────────────────────────
+        print("\n[5/5] E-Mail formatieren und senden...")
 
         if all_errors and deduped_count == 0:
             print("      Alle API-Aufrufe fehlgeschlagen. Sende Fehler-E-Mail...")
@@ -53,13 +60,12 @@ if __name__ == "__main__":
             send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD,
                        subject=f"Daily Digest - FEHLER - {today_str}")
         else:
-            html   = format_html_email(analyzed)
+            html   = format_html_email(analyzed, feed_warnings=feed_warnings)
             status = "partial" if all_errors else "success"
             send_email(html, EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD,
                        subject=f"Daily Digest - {today_str}")
 
-        # ── 4. Log ────────────────────────────────────────────────────────────
-        print("\n[4/4] Log schreiben...")
+        print("\nLog schreiben...")
         log_entry = build_log_entry(
             fetched_count  = fetched_count,
             filtered_count = filtered_count,
