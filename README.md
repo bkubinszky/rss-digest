@@ -41,8 +41,8 @@ rss-digest/
 | Component | Tool |
 |---|---|
 | Scheduling | GitHub Actions (free) |
-| Primary LLM | Groq API — Llama 3.3 70B (free tier) |
-| Fallback LLM | Google Gemini 2.0 Flash (free tier) |
+| Primary LLM |  Google Gemini 2.0 Flash (free tier) |
+| Fallback LLM | Groq API — Llama 3.3 70B (free tier) |
 | Email delivery | Gmail SMTP |
 
 If Groq hits its daily token limit, the script automatically retries with Gemini. If both fail, you receive a descriptive error email instead of a silent empty digest.
