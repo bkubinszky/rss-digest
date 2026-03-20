@@ -31,42 +31,9 @@ def is_transient(e):
 # ─── LLM CALL WITH FALLBACK AND RETRY ────────────────────────────────────────
 
 def call_llm(prompt, label=""):
-    """Try Groq first with retry/backoff, then fall back to Gemini with retry/backoff."""
+    """Try Gemini first with retry/backoff, then fall back to Groq with retry/backoff."""
 
-    # — Groq —
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            client = Groq(api_key=GROQ_API_KEY)
-            response = client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-                max_tokens=4000,
-            )
-            return response.choices[0].message.content.strip(), "Groq"
-
-        except APIStatusError as e:
-            if e.status_code == 429:
-                print(f"      Groq rate limit hit{' (' + label + ')' if label else ''}. Falling back to Gemini...")
-                break
-            elif e.status_code >= 500:
-                wait = BACKOFF_BASE * (2 ** (attempt - 1))
-                print(f"      Groq server error ({e.status_code}), attempt {attempt}/{MAX_RETRIES}. Retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                print(f"      Groq error ({e.status_code}){' (' + label + ')' if label else ''}. Falling back to Gemini...")
-                break
-
-        except Exception as e:
-            if is_transient(e):
-                wait = BACKOFF_BASE * (2 ** (attempt - 1))
-                print(f"      Groq transient error ({e}), attempt {attempt}/{MAX_RETRIES}. Retrying in {wait}s...")
-                time.sleep(wait)
-            else:
-                print(f"      Groq unexpected error: {e}. Falling back to Gemini...")
-                break
-
-    # — Gemini fallback —
+    # — Gemini (primary) —
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
@@ -88,7 +55,8 @@ def call_llm(prompt, label=""):
                 print(f"      Gemini rate limit/server error ({e.code}), attempt {attempt}/{MAX_RETRIES}. Retrying in {wait}s...")
                 time.sleep(wait)
             else:
-                raise RuntimeError(f"Gemini non-retriable error: HTTP {e.code}")
+                print(f"      Gemini non-retriable error (HTTP {e.code}){' (' + label + ')' if label else ''}. Falling back to Groq...")
+                break
 
         except Exception as e:
             if is_transient(e):
@@ -96,9 +64,42 @@ def call_llm(prompt, label=""):
                 print(f"      Gemini transient error ({e}), attempt {attempt}/{MAX_RETRIES}. Retrying in {wait}s...")
                 time.sleep(wait)
             else:
-                raise RuntimeError(f"Gemini unexpected error: {e}")
+                print(f"      Gemini unexpected error: {e}. Falling back to Groq...")
+                break
 
-    raise RuntimeError(f"Both Groq and Gemini failed after {MAX_RETRIES} attempts each.")
+    # — Groq (fallback) —
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            client = Groq(api_key=GROQ_API_KEY)
+            response = client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=4000,
+            )
+            return response.choices[0].message.content.strip(), "Groq"
+
+        except APIStatusError as e:
+            if e.status_code == 429:
+                wait = BACKOFF_BASE * (2 ** (attempt - 1))
+                print(f"      Groq rate limit hit, attempt {attempt}/{MAX_RETRIES}. Retrying in {wait}s...")
+                time.sleep(wait)
+            elif e.status_code >= 500:
+                wait = BACKOFF_BASE * (2 ** (attempt - 1))
+                print(f"      Groq server error ({e.status_code}), attempt {attempt}/{MAX_RETRIES}. Retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise RuntimeError(f"Groq non-retriable error: HTTP {e.status_code}")
+
+        except Exception as e:
+            if is_transient(e):
+                wait = BACKOFF_BASE * (2 ** (attempt - 1))
+                print(f"      Groq transient error ({e}), attempt {attempt}/{MAX_RETRIES}. Retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise RuntimeError(f"Groq unexpected error: {e}")
+
+    raise RuntimeError(f"Both Gemini and Groq failed after {MAX_RETRIES} attempts each.")
 
 
 # ─── ANALYZE ──────────────────────────────────────────────────────────────────
@@ -158,7 +159,7 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
             print(f"      (answered by {api_used})")
             batch_results = json.loads(clean_json(raw))
             all_results.extend(batch_results)
-            if api_used == "Gemini":
+            if api_used == "Groq":
                 time.sleep(5)
 
         except RuntimeError as e:
