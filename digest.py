@@ -1,4 +1,4 @@
-from config import RSS_FEEDS, YOUR_INTERESTS, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO, SCORE_THRESHOLD
+from config import RSS_FEEDS, YOUR_INTERESTS, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO
 from fetcher import fetch_recent_items
 from analyzer import analyze_items
 from deduplicator import deduplicate_items
@@ -12,11 +12,11 @@ if __name__ == "__main__":
     print("=== Daily Digest ===")
     today_str  = datetime.now().strftime("%d.%m.%Y")
     all_errors = []
-    api_usage  = {"Groq": 0, "Gemini": 0}
+    api_usage  = {"Gemini": 0, "Groq": 0}
 
     # ── 1. Fetch ──────────────────────────────────────────────────────────────
     print("\n[1/5] RSS-Feeds abrufen...")
-    items, feed_statuses = fetch_recent_items(RSS_FEEDS, hours=24)
+    items, feed_statuses = fetch_recent_items(RSS_FEEDS)
     fetched_count = len(items)
 
     # ── 2. Feed health check ──────────────────────────────────────────────────
@@ -40,7 +40,6 @@ if __name__ == "__main__":
         for api, count in batch_usage.items():
             api_usage[api] = api_usage.get(api, 0) + count
 
-        analyzed = [i for i in analyzed if i.get("score", 0) >= SCORE_THRESHOLD]
         filtered_count = len(analyzed)
         print(f"      {filtered_count} relevante Artikel nach dem Filtern.")
 
