@@ -105,7 +105,7 @@ def call_llm(prompt, label=""):
 # ─── ANALYZE ──────────────────────────────────────────────────────────────────
 
 def analyze_items(items, interests):
-    """Filter, score, summarize and translate items in batches."""
+    """Filter, score, summarize and annotate items in batches."""
     from config import MOCK_MODE
     from mock import MOCK_ANALYZED_ITEMS
     if MOCK_MODE:
@@ -132,20 +132,22 @@ def analyze_items(items, interests):
 ## Your tasks:
 1. **Filter**: Discard any item that is not clearly relevant to my interests. Be strict.
 2. **Score**: Assign each remaining item a relevance score from 1 to 10.
-3. **Summarize**: Write a concise 1-2 sentence summary in German. Do not copy the original text.
-4. **Translate**: Translate the article title into German.
-5. **Link**: Preserve the original URL.
+3. **Keep original title**: Do NOT translate the title. Keep it exactly as it appears in the source.
+4. **Summarize**: Write a concise 2-sentence summary in German.
+5. **Why it matters**: Write 1 sentence in German explaining why this article is actionable or relevant from a monetization perspective.
+6. **Link**: Preserve the original URL.
 
 ## Output format:
 Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fences.
 
 [
   {{
-    "title": "Article title translated into German",
+    "title": "Original article title, unchanged",
     "source": "Feed source name",
     "link": "https://...",
     "score": 8,
-    "summary": "1-2 sentence summary in German."
+    "summary": "2-sentence summary in German.",
+    "why_it_matters": "1 sentence in German on monetization relevance."
   }}
 ]
 
