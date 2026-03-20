@@ -5,8 +5,13 @@ from email.mime.text import MIMEText
 from config import MOCK_MODE
 
 
-def format_html_email(analyzed_items):
-    """Build a clean HTML email, items sorted by score descending."""
+def format_html_email(analyzed_items, feed_warnings=None):
+    """Build a clean HTML email, items sorted by score descending.
+    
+    Args:
+        analyzed_items: list of scored and deduplicated article dicts
+        feed_warnings:  list of dicts for feeds that have hit the failure threshold
+    """
     DAYS_DE   = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
     MONTHS_DE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"]
     now   = datetime.now()
@@ -19,6 +24,8 @@ def format_html_email(analyzed_items):
         for l in item.get("links", [{"source": item.get("source", "")}])
     ))
 
+    # ── Banners ───────────────────────────────────────────────────────────────
+
     mock_banner = ""
     if MOCK_MODE:
         mock_banner = """
@@ -28,12 +35,32 @@ def format_html_email(analyzed_items):
 </div>
 """
 
+    feed_warning_banner = ""
+    if feed_warnings:
+        feed_list = "".join(
+            f"<li style='margin-bottom: 4px;'>"
+            f"<strong>{w['source']}</strong> — {w['consecutive_failures']} Tage in Folge fehlgeschlagen"
+            f"</li>"
+            for w in feed_warnings
+        )
+        feed_warning_banner = f"""
+<div style="background: #fdecea; border: 1px solid #f44336; border-radius: 6px;
+            padding: 10px 14px; margin: 12px 0; font-size: 13px; color: #c62828;">
+  &#9888;&#65039; <strong>Feed-Warnung:</strong> Die folgenden Quellen konnten seit mehreren Tagen nicht abgerufen werden:
+  <ul style="margin: 6px 0 0 0; padding-left: 18px;">
+    {feed_list}
+  </ul>
+  Bitte die Feed-URLs in <code>config.py</code> prüfen.
+</div>
+"""
+
     if not analyzed_items:
         return f"""
 <html><body style="font-family: Georgia, serif; max-width: 680px; margin: 0 auto; padding: 24px; color: #222;">
 <h1 style="border-bottom: 2px solid #222; padding-bottom: 8px;">Daily Digest</h1>
 <p style="color: #666;">{today}</p>
 {mock_banner}
+{feed_warning_banner}
 <p>Heute keine relevanten Artikel gefunden. Genieß die Stille.</p>
 </body></html>
 """
@@ -56,6 +83,7 @@ def format_html_email(analyzed_items):
   {today} &nbsp;|&nbsp; {num_items} Artikel aus {num_sources} Quelle{"n" if num_sources != 1 else ""}
 </p>
 {mock_banner}
+{feed_warning_banner}
 """
 
     for item in sorted_items:
@@ -90,7 +118,7 @@ def format_html_email(analyzed_items):
     html += """
 <hr style="border: none; border-top: 1px solid #ddd; margin-top: 40px;">
 <p style="font-size: 11px; color: #bbb; text-align: center;">
-  Daily Digest wurde automatisch generiert mit Groq / Gemini & GitHub Actions.
+  Automatisch erstellt mit Groq &amp; GitHub Actions.
 </p>
 </body></html>
 """
