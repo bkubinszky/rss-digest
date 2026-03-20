@@ -1,14 +1,15 @@
 import json
 from analyzer import call_llm, clean_json
 
+
 def deduplicate_items(items):
+    """Merge items covering the same story into one entry with multiple links."""
     from config import MOCK_MODE
     from mock import MOCK_DEDUPED_ITEMS
     if MOCK_MODE:
         print("      MOCK MODE: skipping deduplication LLM call, returning mock data.")
         return MOCK_DEDUPED_ITEMS, []
-        
-    """Merge items covering the same story into one entry with multiple links."""
+
     if not items:
         return [], []
 
@@ -16,18 +17,20 @@ def deduplicate_items(items):
 
 Your task:
 1. Identify items that cover the same story or event.
-2. Merge them into a single item, keeping the best summary (in German).
+2. Merge them into a single item, keeping the best summary and why_it_matters (both in German).
 3. Collect ALL links from the merged items into a "links" array, each with a "source" and "url" field.
 4. For non-duplicate items, still wrap the single link in the same "links" array format.
 5. Keep the highest score among merged items.
+6. Keep the original title (do not translate).
 
 Return ONLY a valid JSON array. No preamble, no markdown fences.
 
 [
   {{
-    "title": "Article title in German",
+    "title": "Original article title, unchanged",
     "score": 8,
-    "summary": "Merged or original summary in German.",
+    "summary": "Merged or original 2-sentence summary in German.",
+    "why_it_matters": "1 sentence in German on monetization relevance.",
     "links": [
       {{"source": "Feed Source Name", "url": "https://..."}},
       {{"source": "Another Source", "url": "https://..."}}
