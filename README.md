@@ -156,6 +156,7 @@ Tracks consecutive fetch failures per feed in `feed_health.json`. After 3 consec
 ## Backlog
 
 ### Content
+- Change content to Lists of article (with original title and link) by source, and only 1 article of every source should be summarized. The 1 article for summarization should be the possibly most actionable in terms of monetization for me.  
 - "Why this matters" field — one extra sentence of context per article explaining its broader relevance
 - Configurable summary length — short (1 sentence) vs detailed (3–4 sentences), switchable in `config.py`
 - Language toggle — switch output between German and English without rewriting the interests block
