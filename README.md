@@ -21,6 +21,7 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sum
 rss-digest/
 ├── digest.py        # Main orchestrator — runs the pipeline
 ├── config.py        # All configurable values: feeds, interests, thresholds, model names, flags
+├── interests.md     # Your interests and filters in plain English — edit this to tune the digest
 ├── fetcher.py       # RSS feed fetching
 ├── analyzer.py      # LLM calls (Groq + Gemini fallback), filtering, scoring, summarizing
 ├── deduplicator.py  # Merges duplicate stories from different sources
@@ -78,7 +79,7 @@ All configurable values live in `config.py`. Key settings:
 | Setting | Default | Description |
 |---|---|---|
 | `RSS_FEEDS` | — | Your list of RSS feed URLs |
-| `YOUR_INTERESTS` | — | Plain English description of your interests and filters |
+| `YOUR_INTERESTS` | — | Loaded automatically from `interests.md` — edit that file directly |
 | `FETCH_HOURS` | `24` | How many hours back to look for articles |
 | `SUMMARY_TRUNCATION` | `300` | Max characters of feed summary sent to LLM |
 | `BATCH_SIZE` | `15` | Number of articles per LLM call |
