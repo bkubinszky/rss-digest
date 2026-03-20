@@ -143,7 +143,7 @@ def format_error_email(errors):
   {error_list}
 </ul>
 <p style="margin-top: 24px; font-size: 13px; color: #666;">
-  Mögliche Ursachen: tägliches Token-Limit bei Groq und/oder Gemini erreicht, oder API-Key ungültig.
+  Mögliche Ursachen: tägliches Token-Limit bei Gemini und/oder Groq erreicht, oder API-Key ungültig.
   Bitte <a href="https://console.groq.com">console.groq.com</a> und
   <a href="https://aistudio.google.com">aistudio.google.com</a> prüfen.
 </p>
