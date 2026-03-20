@@ -161,8 +161,7 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
             print(f"      (answered by {api_used})")
             batch_results = json.loads(clean_json(raw))
             all_results.extend(batch_results)
-            if api_used == "Groq":
-                time.sleep(5)
+            time.sleep(5)  # Respect per-minute rate limits on both APIs
 
         except RuntimeError as e:
             error_msg = f"Batch {idx + 1}/{len(batches)}: {e}"
