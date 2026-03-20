@@ -30,6 +30,7 @@ rss-digest/
 ├── mock.py          # Pre-built fake results for token-free testing
 ├── log.json         # Auto-generated run history (committed by Actions bot)
 ├── feed_health.json # Auto-generated feed failure counters (committed by Actions bot)
+├── .gitignore       # Excludes Python cache files and local .env from commits
 └── .github/
     └── workflows/
         └── digest.yml  # GitHub Actions schedule and workflow
@@ -134,6 +135,9 @@ After each run, `log.json` is automatically updated and committed by the Actions
 | Gemini 2.0 Flash (free) | 1,500 requests/day |
 
 A single daily run consumes roughly 20,000–25,000 Groq tokens. Both limits are well within range for normal use. Use mock mode during development and testing to avoid burning through the daily quota.
+
+### Local development
+If you ever run the script locally, create a `.env` file in the repo root with your credentials instead of setting them as shell environment variables. This file is excluded from commits via `.gitignore` — never commit it.
 
 ---
 
