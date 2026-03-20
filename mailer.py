@@ -90,7 +90,7 @@ def format_html_email(analyzed_items):
     html += """
 <hr style="border: none; border-top: 1px solid #ddd; margin-top: 40px;">
 <p style="font-size: 11px; color: #bbb; text-align: center;">
-  Automatisch erstellt mit Groq &amp; GitHub Actions.
+  Daily Digest wurde automatisch generiert mit Groq / Gemini & GitHub Actions.
 </p>
 </body></html>
 """
