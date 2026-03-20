@@ -7,11 +7,12 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sum
 - Fetches articles from a configurable list of RSS feeds (last 24 hours)
 - Sends items to an LLM for filtering, scoring, summarizing, and translation into German
 - Merges duplicate stories from different sources into a single entry with multiple links
-- Sorts articles by relevance score (highest first) and drops anything below 5/10
+- Sorts articles by relevance score (highest first) and drops anything below the configured threshold
 - Delivers a formatted HTML email daily
 - Automatically falls back to Gemini if Groq hits its daily token limit
 - Sends a clear error email if both APIs fail — no more silent empty digests
 - Writes a structured run log to `log.json` after every run
+- Tracks feed health and shows a warning banner in the digest if a feed has been failing for 3+ days
 - Supports mock mode for testing without consuming any API tokens
 
 ## File structure
@@ -19,14 +20,16 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sum
 ```
 rss-digest/
 ├── digest.py        # Main orchestrator — runs the pipeline
-├── config.py        # Your feeds, interests, credentials, and mock flag
+├── config.py        # All configurable values: feeds, interests, thresholds, model names, flags
 ├── fetcher.py       # RSS feed fetching
 ├── analyzer.py      # LLM calls (Groq + Gemini fallback), filtering, scoring, summarizing
 ├── deduplicator.py  # Merges duplicate stories from different sources
 ├── mailer.py        # HTML email formatting and sending
 ├── logger.py        # Run logging to log.json
+├── health.py        # Feed health tracking and warning logic
 ├── mock.py          # Pre-built fake results for token-free testing
 ├── log.json         # Auto-generated run history (committed by Actions bot)
+├── feed_health.json # Auto-generated feed failure counters (committed by Actions bot)
 └── .github/
     └── workflows/
         └── digest.yml  # GitHub Actions schedule and workflow
@@ -65,57 +68,50 @@ Add the following secrets under Settings → Secrets and variables → Actions:
 
 ### 3. GitHub Actions permissions
 
-Go to Settings → Actions → General → Workflow permissions and set to **Read and write permissions**. This is required for the Actions bot to commit `log.json` after each run.
+Go to Settings → Actions → General → Workflow permissions and set to **Read and write permissions**. This is required for the Actions bot to commit `log.json` and `feed_health.json` after each run.
 
 ### 4. Configure the script
 
-In `config.py`, edit two sections:
+All configurable values live in `config.py`. Key settings:
 
-**Your feeds:**
-```python
-RSS_FEEDS = [
-    "https://yourfeed.com/rss",
-    ...
-]
-```
-
-**Your interests:**
-```python
-YOUR_INTERESTS = """
-I'm interested in: ...
-I am NOT interested in: ...
-"""
-```
-
-The interests block is plain English — the more specific you are, the better the filtering and scoring will be.
+| Setting | Default | Description |
+|---|---|---|
+| `RSS_FEEDS` | — | Your list of RSS feed URLs |
+| `YOUR_INTERESTS` | — | Plain English description of your interests and filters |
+| `FETCH_HOURS` | `24` | How many hours back to look for articles |
+| `SUMMARY_TRUNCATION` | `300` | Max characters of feed summary sent to LLM |
+| `BATCH_SIZE` | `15` | Number of articles per LLM call |
+| `MAX_RETRIES` | `3` | Retry attempts per API call on transient errors |
+| `BACKOFF_BASE` | `5` | Base seconds for exponential backoff |
+| `GROQ_MODEL` | `llama-3.3-70b-versatile` | Groq model name |
+| `GEMINI_MODEL` | `gemini-2.0-flash` | Gemini model name |
+| `SCORE_THRESHOLD` | `5` | Articles scoring below this are excluded (1–10) |
+| `FAILURE_THRESHOLD` | `3` | Consecutive feed failures before a warning appears |
+| `MOCK_MODE` | `False` | Set to `True` for token-free testing |
 
 ### 5. Schedule
 
-The digest runs daily at 07:00 UTC. To change the time, edit the cron line in `.github/workflows/digest.yml`:
+The digest runs daily at **09:00 CET (08:00 UTC)**. GitHub Actions always uses UTC. To change the time, edit the cron line in `.github/workflows/digest.yml`:
 
 ```yaml
-- cron: '0 7 * * *'
+- cron: '0 8 * * *'
 ```
 
-Use [crontab.guru](https://crontab.guru) to customize.
+Use [crontab.guru](https://crontab.guru) to customize. Note: GitHub Actions does not handle daylight saving time automatically — expect a 1-hour drift between CET and CEST seasons.
 
 ## Mock mode
 
-To test the full pipeline without consuming any API tokens, set the following flag in `config.py`:
+To test the full pipeline without consuming any API tokens, set in `config.py`:
 
 ```python
 MOCK_MODE = True
 ```
 
-In mock mode, all LLM calls are skipped. Pre-built German-language fake articles from `mock.py` are used instead. The email, log, and everything else runs exactly as in a real run. Remember to set it back to `False` before the next scheduled run.
-
-## Manual test run
-
-Go to Actions → Daily RSS Digest → Run workflow. Check the logs for any errors. Avoid running multiple manual tests in a single day — each real run consumes roughly 20,000–25,000 Groq tokens and you may hit the daily limit before the scheduled run. Use mock mode instead.
+In mock mode, all LLM calls are skipped and pre-built German-language fake articles from `mock.py` are used instead. The email will show a yellow warning banner indicating mock data. Remember to set it back to `False` before the next scheduled run.
 
 ## Run log
 
-After each run, `log.json` is automatically updated and committed to the repo by the Actions bot. Each entry looks like this:
+After each run, `log.json` is automatically updated and committed by the Actions bot. Each entry looks like this:
 
 ```json
 {
@@ -137,18 +133,58 @@ After each run, `log.json` is automatically updated and committed to the repo by
 | Groq (free) | 100,000 tokens/day |
 | Gemini 2.0 Flash (free) | 1,500 requests/day |
 
-A single daily run consumes roughly 20,000–25,000 Groq tokens. Both limits are well within range for normal use. Use mock mode during development and testing.
+A single daily run consumes roughly 20,000–25,000 Groq tokens. Both limits are well within range for normal use. Use mock mode during development and testing to avoid burning through the daily quota.
+
+---
+
+## ⚠️ Features implemented but not yet tested in production
+
+The following features were built and committed but could not be fully verified due to the nature of what would be required to trigger them:
+
+**Retry with exponential backoff** (`analyzer.py`)
+Automatically retries failed LLM calls up to 3 times with increasing delays (5s, 10s, 20s) on transient network errors or server-side 5xx responses. Cannot be easily triggered on demand — will be confirmed working the first time a real transient error occurs in production.
+
+**Feed health check and warning** (`health.py`, `mailer.py`)
+Tracks consecutive fetch failures per feed in `feed_health.json`. After 3 consecutive failures, a red warning banner appears in the next digest email listing the affected feeds. Resets automatically when a feed recovers. Requires a feed to fail 3 days in a row to observe — has not yet been triggered in production.
+
+---
+
+## Backlog
+
+### Content
+- "Why this matters" field — one extra sentence of context per article explaining its broader relevance
+- Configurable summary length — short (1 sentence) vs detailed (3–4 sentences), switchable in `config.py`
+- Language toggle — switch output between German and English without rewriting the interests block
+- Trending topics detection — if the same theme appears across 3+ articles, flag it at the top of the digest
+- Keyword watchlist — a list of terms that automatically boost an article's score if they appear
+
+### Feeds & delivery
+- Newsletter integration via Kill the Newsletter — convert email newsletters to RSS feeds
+- OPML import support — import feed list directly from any RSS reader export
+- Skip sending if below minimum threshold — if fewer than N articles score above the threshold, skip the email entirely
+
+### Visibility
+- "First seen" indicator — flag articles from sources that rarely appear in the digest
+
+### Configuration
+- Move `YOUR_INTERESTS` to a separate `interests.md` file — easier to edit in GitHub without touching Python
+
+---
 
 ## Changelog
 
 ### v2
-- Refactored into modular file structure (`config`, `fetcher`, `analyzer`, `deduplicator`, `mailer`, `logger`, `mock`)
+- Refactored into modular file structure (`config`, `fetcher`, `analyzer`, `deduplicator`, `mailer`, `logger`, `health`, `mock`)
+- All configurable values centralized in `config.py`
 - Added Gemini 2.0 Flash as automatic fallback when Groq rate limit is hit
+- Added retry with exponential backoff for transient errors
 - Added descriptive error email when both APIs fail
 - Added run logging to `log.json`, committed automatically after each run
-- Added mock mode for token-free testing
+- Added feed health tracking with warning banner in digest email
+- Added mock mode for token-free testing with visual banner in email
 - Reduced feed summary truncation from 600 to 300 characters to lower token usage
-- Articles scoring below 5/10 are excluded from the digest
+- Articles scoring below threshold excluded from digest (configurable)
+- Schedule set to 09:00 CET daily
 
 ### v1
 - Single-file implementation
