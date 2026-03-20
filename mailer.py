@@ -2,16 +2,51 @@ import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from config import MOCK_MODE
+from config import MOCK_MODE, SOURCE_SCORE_THRESHOLD, SOURCE_MAX_ARTICLES
+
+
+def _build_source_sections(analyzed_items):
+    """Group items by source, apply display rules, return ordered list of source blocks.
+
+    Per source:
+    - Show all articles scoring SOURCE_SCORE_THRESHOLD or above
+    - If fewer than SOURCE_MAX_ARTICLES score that high, fill up to SOURCE_MAX_ARTICLES
+      with the next highest scoring articles
+    - Sort articles within each source by score descending
+    - Top article gets summary + why_it_matters; rest get title + link only
+    - Sources ordered by their top article's score descending
+    """
+    # Group by source
+    sources = {}
+    for item in analyzed_items:
+        # Items may come from deduplicator with a "links" array,
+        # or directly from analyzer with a single "source" field
+        links  = item.get("links", [{"source": item.get("source", "Unbekannt"), "url": item.get("link", "#")}])
+        source = links[0].get("source", "Unbekannt")
+        sources.setdefault(source, []).append(item)
+
+    # Apply display rules per source
+    source_blocks = []
+    for source, items in sources.items():
+        sorted_items = sorted(items, key=lambda x: x.get("score", 0), reverse=True)
+
+        above_threshold = [i for i in sorted_items if i.get("score", 0) >= SOURCE_SCORE_THRESHOLD]
+
+        if len(above_threshold) >= SOURCE_MAX_ARTICLES:
+            display_items = above_threshold
+        else:
+            display_items = sorted_items[:SOURCE_MAX_ARTICLES]
+
+        top_score = display_items[0].get("score", 0) if display_items else 0
+        source_blocks.append((source, display_items, top_score))
+
+    # Order sources by top article score descending
+    source_blocks.sort(key=lambda x: x[2], reverse=True)
+    return source_blocks
 
 
 def format_html_email(analyzed_items, feed_warnings=None):
-    """Build a clean HTML email, items sorted by score descending.
-    
-    Args:
-        analyzed_items: list of scored and deduplicated article dicts
-        feed_warnings:  list of dicts for feeds that have hit the failure threshold
-    """
+    """Build a clean HTML email grouped by source."""
     DAYS_DE   = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
     MONTHS_DE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"]
     now   = datetime.now()
@@ -19,9 +54,8 @@ def format_html_email(analyzed_items, feed_warnings=None):
 
     num_items   = len(analyzed_items)
     num_sources = len(set(
-        l.get("source", "")
+        item.get("links", [{"source": item.get("source", "")}])[0].get("source", "")
         for item in analyzed_items
-        for l in item.get("links", [{"source": item.get("source", "")}])
     ))
 
     # ── Banners ───────────────────────────────────────────────────────────────
@@ -65,7 +99,7 @@ def format_html_email(analyzed_items, feed_warnings=None):
 </body></html>
 """
 
-    sorted_items = sorted(analyzed_items, key=lambda x: x.get("score", 0), reverse=True)
+    source_blocks = _build_source_sections(analyzed_items)
 
     def score_color(s):
         if s >= 7: return "#2a7a2a"
@@ -86,21 +120,33 @@ def format_html_email(analyzed_items, feed_warnings=None):
 {feed_warning_banner}
 """
 
-    for item in sorted_items:
-        score   = item.get("score", 0)
-        title   = item.get("title", "Kein Titel")
-        summary = item.get("summary", "")
-        links   = item.get("links", [{"source": item.get("source", "Quelle"), "url": item.get("link", "#")}])
-        color   = score_color(score)
-
-        link_html = " &nbsp; ".join(
-            f'<a href="{l.get("url","#")}" style="font-size: 12px; color: #555; text-decoration: none;">'
-            f'{l.get("source","Quelle")} &rarr;</a>'
-            for l in links
-        )
-
+    for source, items, _ in source_blocks:
         html += f"""
-<div style="margin-bottom: 18px; padding: 14px 16px; background: #f7f7f7;
+<div style="margin-top: 32px;">
+  <h2 style="font-size: 17px; color: #1a1a1a; margin-bottom: 10px;
+             border-left: 4px solid #888; padding-left: 12px;">
+    {source}
+  </h2>
+"""
+        for i, item in enumerate(items):
+            score         = item.get("score", 0)
+            title         = item.get("title", "No title")
+            summary       = item.get("summary", "")
+            why           = item.get("why_it_matters", "")
+            links         = item.get("links", [{"source": source, "url": item.get("link", "#")}])
+            color         = score_color(score)
+            is_top        = (i == 0)
+
+            link_html = " &nbsp; ".join(
+                f'<a href="{l.get("url","#")}" style="font-size: 12px; color: #555; text-decoration: none;">'
+                f'{l.get("source", source)} &rarr;</a>'
+                for l in links
+            )
+
+            if is_top:
+                # Top article: title, score, summary, why it matters, links
+                html += f"""
+<div style="margin-bottom: 14px; padding: 14px 16px; background: #f7f7f7;
             border-radius: 6px; border: 1px solid #e8e8e8;">
   <table width="100%" cellpadding="0" cellspacing="0"><tr>
     <td style="vertical-align: top;">
@@ -110,15 +156,37 @@ def format_html_email(analyzed_items, feed_warnings=None):
       <span style="color: {color}; font-weight: bold; font-size: 13px;">{score}/10</span>
     </td>
   </tr></table>
-  <p style="margin: 8px 0 10px 0; font-size: 14px; line-height: 1.55; color: #333;">{summary}</p>
+  <p style="margin: 8px 0 4px 0; font-size: 14px; line-height: 1.55; color: #333;">{summary}</p>
+  <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.5; color: #555;
+            font-style: italic; border-left: 3px solid #ccc; padding-left: 8px;">
+    {why}
+  </p>
   <div>{link_html}</div>
 </div>
 """
+            else:
+                # Other articles: title, score, link only
+                primary_url = links[0].get("url", "#") if links else "#"
+                html += f"""
+<div style="margin-bottom: 6px; padding: 8px 12px; font-size: 14px; color: #1a1a1a;
+            border-left: 2px solid #ddd;">
+  <table width="100%" cellpadding="0" cellspacing="0"><tr>
+    <td style="vertical-align: middle;">
+      <a href="{primary_url}" style="color: #1a1a8c; text-decoration: none; font-size: 14px;">{title}</a>
+    </td>
+    <td style="vertical-align: middle; text-align: right; white-space: nowrap; padding-left: 12px;">
+      <span style="color: {color}; font-weight: bold; font-size: 12px;">{score}/10</span>
+    </td>
+  </tr></table>
+</div>
+"""
+
+        html += "</div>"  # close source block
 
     html += """
 <hr style="border: none; border-top: 1px solid #ddd; margin-top: 40px;">
 <p style="font-size: 11px; color: #bbb; text-align: center;">
-  Automatisch erstellt mit Groq &amp; GitHub Actions.
+  Automatisch erstellt mit Gemini &amp; GitHub Actions.
 </p>
 </body></html>
 """
@@ -127,7 +195,7 @@ def format_html_email(analyzed_items, feed_warnings=None):
 
 def format_error_email(errors):
     """Build an error notification email listing what went wrong."""
-    today = datetime.now().strftime("%d.%m.%Y %H:%M")
+    today      = datetime.now().strftime("%d.%m.%Y %H:%M")
     error_list = "".join(f"<li style='margin-bottom:8px;'>{e}</li>" for e in errors)
 
     return f"""
@@ -137,15 +205,15 @@ def format_error_email(errors):
   Daily Digest — Fehler aufgetreten
 </h1>
 <p style="color: #888; font-size: 13px;">{today}</p>
-<p>Der heutige Digest konnte nicht vollständig erstellt werden, weil beide APIs (Groq und Gemini) fehlgeschlagen sind.</p>
+<p>Der heutige Digest konnte nicht vollständig erstellt werden, weil beide APIs (Gemini und Groq) fehlgeschlagen sind.</p>
 <p><strong>Fehlermeldungen:</strong></p>
 <ul style="font-size: 14px; line-height: 1.6; color: #333;">
   {error_list}
 </ul>
 <p style="margin-top: 24px; font-size: 13px; color: #666;">
   Mögliche Ursachen: tägliches Token-Limit bei Gemini und/oder Groq erreicht, oder API-Key ungültig.
-  Bitte <a href="https://console.groq.com">console.groq.com</a> und
-  <a href="https://aistudio.google.com">aistudio.google.com</a> prüfen.
+  Bitte <a href="https://aistudio.google.com">aistudio.google.com</a> und
+  <a href="https://console.groq.com">console.groq.com</a> prüfen.
 </p>
 </body></html>
 """
