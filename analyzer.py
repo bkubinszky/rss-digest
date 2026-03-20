@@ -5,6 +5,16 @@ from groq import Groq, APIStatusError
 from config import GROQ_API_KEY, GEMINI_API_KEY
 
 
+# ─── MOCK MODE ─────────────────────────────────────────────────────────────────
+
+def analyze_items(items, interests, batch_size=15):
+    from config import MOCK_MODE
+    from mock import MOCK_ANALYZED_ITEMS
+    if MOCK_MODE:
+        print("      MOCK MODE: skipping LLM calls, returning mock data.")
+        return MOCK_ANALYZED_ITEMS, {}, {"Groq": 0, "Gemini": 0}
+
+
 # ─── LLM CALL WITH FALLBACK ───────────────────────────────────────────────────
 
 def call_llm(prompt, label=""):
