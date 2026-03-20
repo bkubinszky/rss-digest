@@ -1,4 +1,4 @@
-from config import RSS_FEEDS, YOUR_INTERESTS, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO
+from config import RSS_FEEDS, YOUR_INTERESTS, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO, SCORE_THRESHOLD
 from fetcher import fetch_recent_items
 from analyzer import analyze_items
 from deduplicator import deduplicate_items
@@ -40,7 +40,7 @@ if __name__ == "__main__":
         for api, count in batch_usage.items():
             api_usage[api] = api_usage.get(api, 0) + count
 
-        analyzed = [i for i in analyzed if i.get("score", 0) >= 5]
+        analyzed = [i for i in analyzed if i.get("score", 0) >= SCORE_THRESHOLD]
         filtered_count = len(analyzed)
         print(f"      {filtered_count} relevante Artikel nach dem Filtern.")
 
