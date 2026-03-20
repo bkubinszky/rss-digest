@@ -1,4 +1,4 @@
-# Daily Digest v3
+# Daily Digest v2
 
 A fully automated, free daily newsletter that fetches RSS feeds, filters and summarizes articles using AI, and delivers a clean digest to your inbox every morning.
 
