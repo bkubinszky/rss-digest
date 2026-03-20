@@ -32,7 +32,7 @@ I am NOT interested in:
 # ─── SCHEDULE ─────────────────────────────────────────────────────────────────
 # NOTE: The actual cron schedule is set in .github/workflows/digest.yml
 # Change it there. This comment is here so you know where to look.
-# Current schedule: daily at 07:00 UTC
+# Current schedule: daily at 09:00 CET (08:00 UTC)
 
 # ─── FETCH SETTINGS ───────────────────────────────────────────────────────────
 
