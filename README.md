@@ -12,18 +12,20 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sum
 - Automatically falls back to Gemini if Groq hits its daily token limit
 - Sends a clear error email if both APIs fail — no more silent empty digests
 - Writes a structured run log to `log.json` after every run
+- Supports mock mode for testing without consuming any API tokens
 
 ## File structure
 
 ```
 rss-digest/
 ├── digest.py        # Main orchestrator — runs the pipeline
-├── config.py        # Your feeds, interests, and credentials (via env vars)
+├── config.py        # Your feeds, interests, credentials, and mock flag
 ├── fetcher.py       # RSS feed fetching
 ├── analyzer.py      # LLM calls (Groq + Gemini fallback), filtering, scoring, summarizing
 ├── deduplicator.py  # Merges duplicate stories from different sources
 ├── mailer.py        # HTML email formatting and sending
 ├── logger.py        # Run logging to log.json
+├── mock.py          # Pre-built fake results for token-free testing
 ├── log.json         # Auto-generated run history (committed by Actions bot)
 └── .github/
     └── workflows/
@@ -36,7 +38,7 @@ rss-digest/
 |---|---|
 | Scheduling | GitHub Actions (free) |
 | Primary LLM | Groq API — Llama 3.3 70B (free tier) |
-| Fallback LLM | Google Gemini 1.5 Flash (free tier) |
+| Fallback LLM | Google Gemini 2.0 Flash (free tier) |
 | Email delivery | Gmail SMTP |
 
 If Groq hits its daily token limit, the script automatically retries with Gemini. If both fail, you receive a descriptive error email instead of a silent empty digest.
@@ -97,9 +99,19 @@ The digest runs daily at 07:00 UTC. To change the time, edit the cron line in `.
 
 Use [crontab.guru](https://crontab.guru) to customize.
 
+## Mock mode
+
+To test the full pipeline without consuming any API tokens, set the following flag in `config.py`:
+
+```python
+MOCK_MODE = True
+```
+
+In mock mode, all LLM calls are skipped. Pre-built German-language fake articles from `mock.py` are used instead. The email, log, and everything else runs exactly as in a real run. Remember to set it back to `False` before the next scheduled run.
+
 ## Manual test run
 
-Go to Actions → Daily RSS Digest → Run workflow. Check the logs for any errors. Avoid running multiple manual tests in a single day — each run consumes roughly 20,000–25,000 Groq tokens and you may hit the daily limit before the scheduled run.
+Go to Actions → Daily RSS Digest → Run workflow. Check the logs for any errors. Avoid running multiple manual tests in a single day — each real run consumes roughly 20,000–25,000 Groq tokens and you may hit the daily limit before the scheduled run. Use mock mode instead.
 
 ## Run log
 
@@ -123,17 +135,18 @@ After each run, `log.json` is automatically updated and committed to the repo by
 | Service | Daily limit |
 |---|---|
 | Groq (free) | 100,000 tokens/day |
-| Gemini 1.5 Flash (free) | 1,500 requests/day |
+| Gemini 2.0 Flash (free) | 1,500 requests/day |
 
-A single daily run consumes roughly 20,000–25,000 Groq tokens. Both limits are well within range for normal use.
+A single daily run consumes roughly 20,000–25,000 Groq tokens. Both limits are well within range for normal use. Use mock mode during development and testing.
 
 ## Changelog
 
 ### v2
-- Refactored into modular file structure (`config`, `fetcher`, `analyzer`, `deduplicator`, `mailer`, `logger`)
-- Added Gemini API as automatic fallback when Groq rate limit is hit
+- Refactored into modular file structure (`config`, `fetcher`, `analyzer`, `deduplicator`, `mailer`, `logger`, `mock`)
+- Added Gemini 2.0 Flash as automatic fallback when Groq rate limit is hit
 - Added descriptive error email when both APIs fail
 - Added run logging to `log.json`, committed automatically after each run
+- Added mock mode for token-free testing
 - Reduced feed summary truncation from 600 to 300 characters to lower token usage
 - Articles scoring below 5/10 are excluded from the digest
 
