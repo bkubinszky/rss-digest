@@ -1,8 +1,8 @@
 import json
 import os
+from config import FAILURE_THRESHOLD
 
 HEALTH_FILE = "feed_health.json"
-FAILURE_THRESHOLD = 3
 
 
 def load_health():
@@ -24,25 +24,23 @@ def save_health(health):
 
 def update_feed_health(feed_statuses):
     """Update consecutive failure counters for each feed.
-    
+
     Returns:
         warnings: list of dicts for feeds that have hit the failure threshold
                   each dict has: {url, source, consecutive_failures}
     """
-    health = load_health()
+    health   = load_health()
     warnings = []
 
     for url, status in feed_statuses.items():
         source = status.get("source", url)
 
         if status["success"]:
-            # Reset counter on success
             if url in health:
                 if health[url]["consecutive_failures"] >= FAILURE_THRESHOLD:
                     print(f"      Feed recovered: {source}")
                 del health[url]
         else:
-            # Increment failure counter
             if url not in health:
                 health[url] = {"source": source, "consecutive_failures": 0}
 
