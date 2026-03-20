@@ -49,5 +49,24 @@
       "Batch 5/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests",
       "Batch 6/6: Both Groq and Gemini failed: HTTP Error 429: Too Many Requests"
     ]
+  },
+  {
+    "timestamp": "2026-03-20T05:15:53.955763Z",
+    "status": "success",
+    "items": {
+      "fetched": 73,
+      "after_filter": 38,
+      "after_dedup": 7
+    },
+    "score_distribution": {
+      "9-10": 1,
+      "7-8": 4,
+      "5-6": 2
+    },
+    "api_usage": {
+      "Groq": 5,
+      "Gemini": 0
+    },
+    "errors": []
   }
 ]
