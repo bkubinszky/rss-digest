@@ -36,3 +36,4 @@ EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
 EMAIL_TO       = os.environ["EMAIL_TO"]
 GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+MOCK_MODE = True  # Set to False for real runs
