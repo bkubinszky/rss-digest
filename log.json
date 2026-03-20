@@ -165,5 +165,27 @@
     "errors": [
       "Deduplication: Both Groq and Gemini failed after 3 attempts each."
     ]
+  },
+  {
+    "timestamp": "2026-03-20T12:11:39.006386Z",
+    "status": "partial",
+    "items": {
+      "fetched": 77,
+      "after_filter": 28,
+      "after_dedup": 28
+    },
+    "score_distribution": {
+      "9-10": 7,
+      "7-8": 16,
+      "5-6": 5
+    },
+    "api_usage": {
+      "Gemini": 0,
+      "Groq": 5
+    },
+    "errors": [
+      "Batch 5/6: Both Gemini and Groq failed after 3 attempts each.",
+      "Deduplication: Both Gemini and Groq failed after 3 attempts each."
+    ]
   }
 ]
