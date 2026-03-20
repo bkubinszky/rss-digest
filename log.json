@@ -68,5 +68,24 @@
       "Gemini": 0
     },
     "errors": []
+  },
+  {
+    "timestamp": "2026-03-20T05:21:12.186038Z",
+    "status": "success",
+    "items": {
+      "fetched": 73,
+      "after_filter": 39,
+      "after_dedup": 7
+    },
+    "score_distribution": {
+      "9-10": 1,
+      "7-8": 4,
+      "5-6": 2
+    },
+    "api_usage": {
+      "Groq": 5,
+      "Gemini": 0
+    },
+    "errors": []
   }
 ]
