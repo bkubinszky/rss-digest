@@ -1,8 +1,13 @@
 import json
 from analyzer import call_llm, clean_json
 
-
 def deduplicate_items(items):
+    from config import MOCK_MODE
+    from mock import MOCK_DEDUPED_ITEMS
+    if MOCK_MODE:
+        print("      MOCK MODE: skipping deduplication LLM call, returning mock data.")
+        return MOCK_DEDUPED_ITEMS, []
+        
     """Merge items covering the same story into one entry with multiple links."""
     if not items:
         return [], []
