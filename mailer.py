@@ -6,30 +6,15 @@ from config import MOCK_MODE, SOURCE_SCORE_THRESHOLD, SOURCE_MAX_ARTICLES
 
 
 def _build_source_sections(analyzed_items):
-    """Group items by source, apply display rules, return ordered list of source blocks.
-
-    Per source:
-    - Show all articles scoring SOURCE_SCORE_THRESHOLD or above
-    - If fewer than SOURCE_MAX_ARTICLES score that high, fill up to SOURCE_MAX_ARTICLES
-      with the next highest scoring articles
-    - Sort articles within each source by score descending
-    - Top article gets summary + why_it_matters; rest get title + link only
-    - Sources ordered by their top article's score descending
-    """
-    # Group by source
+    """Group items by source, apply display rules, return ordered list of source blocks."""
     sources = {}
     for item in analyzed_items:
-        # Items may come from deduplicator with a "links" array,
-        # or directly from analyzer with a single "source" field
-        links  = item.get("links", [{"source": item.get("source", "Unbekannt"), "url": item.get("link", "#")}])
-        source = links[0].get("source", "Unbekannt")
+        source = item.get("source", "Unbekannt")
         sources.setdefault(source, []).append(item)
 
-    # Apply display rules per source
     source_blocks = []
     for source, items in sources.items():
-        sorted_items = sorted(items, key=lambda x: x.get("score", 0), reverse=True)
-
+        sorted_items  = sorted(items, key=lambda x: x.get("score", 0), reverse=True)
         above_threshold = [i for i in sorted_items if i.get("score", 0) >= SOURCE_SCORE_THRESHOLD]
 
         if len(above_threshold) >= SOURCE_MAX_ARTICLES:
@@ -40,23 +25,19 @@ def _build_source_sections(analyzed_items):
         top_score = display_items[0].get("score", 0) if display_items else 0
         source_blocks.append((source, display_items, top_score))
 
-    # Order sources by top article score descending
     source_blocks.sort(key=lambda x: x[2], reverse=True)
     return source_blocks
 
 
 def format_html_email(analyzed_items, feed_warnings=None):
-    """Build a clean HTML email grouped by source."""
+    """Build a clean HTML email grouped by source. Articles listed as title + link + score only."""
     DAYS_DE   = ["Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag","Sonntag"]
     MONTHS_DE = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"]
     now   = datetime.now()
     today = f"{DAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}"
 
     num_items   = len(analyzed_items)
-    num_sources = len(set(
-        item.get("links", [{"source": item.get("source", "")}])[0].get("source", "")
-        for item in analyzed_items
-    ))
+    num_sources = len(set(item.get("source", "") for item in analyzed_items))
 
     # ── Banners ───────────────────────────────────────────────────────────────
 
@@ -122,57 +103,24 @@ def format_html_email(analyzed_items, feed_warnings=None):
 
     for source, items, _ in source_blocks:
         html += f"""
-<div style="margin-top: 32px;">
-  <h2 style="font-size: 17px; color: #1a1a1a; margin-bottom: 10px;
-             border-left: 4px solid #888; padding-left: 12px;">
+<div style="margin-top: 28px;">
+  <h2 style="font-size: 16px; color: #1a1a1a; margin-bottom: 8px;
+             border-left: 4px solid #888; padding-left: 10px;">
     {source}
   </h2>
 """
-        for i, item in enumerate(items):
-            score         = item.get("score", 0)
-            title         = item.get("title", "No title")
-            summary       = item.get("summary", "")
-            why           = item.get("why_it_matters", "")
-            links         = item.get("links", [{"source": source, "url": item.get("link", "#")}])
-            color         = score_color(score)
-            is_top        = (i == 0)
+        for item in items:
+            score = item.get("score", 0)
+            title = item.get("title", "No title")
+            link  = item.get("link", "#")
+            color = score_color(score)
 
-            link_html = " &nbsp; ".join(
-                f'<a href="{l.get("url","#")}" style="font-size: 12px; color: #555; text-decoration: none;">'
-                f'{l.get("source", source)} &rarr;</a>'
-                for l in links
-            )
-
-            if is_top:
-                # Top article: title, score, summary, why it matters, links
-                html += f"""
-<div style="margin-bottom: 14px; padding: 14px 16px; background: #f7f7f7;
-            border-radius: 6px; border: 1px solid #e8e8e8;">
-  <table width="100%" cellpadding="0" cellspacing="0"><tr>
-    <td style="vertical-align: top;">
-      <span style="font-size: 15px; font-weight: bold; color: #1a1a1a; line-height: 1.4;">{title}</span>
-    </td>
-    <td style="vertical-align: top; text-align: right; white-space: nowrap; padding-left: 12px;">
-      <span style="color: {color}; font-weight: bold; font-size: 13px;">{score}/10</span>
-    </td>
-  </tr></table>
-  <p style="margin: 8px 0 4px 0; font-size: 14px; line-height: 1.55; color: #333;">{summary}</p>
-  <p style="margin: 0 0 10px 0; font-size: 13px; line-height: 1.5; color: #555;
-            font-style: italic; border-left: 3px solid #ccc; padding-left: 8px;">
-    {why}
-  </p>
-  <div>{link_html}</div>
-</div>
-"""
-            else:
-                # Other articles: title, score, link only
-                primary_url = links[0].get("url", "#") if links else "#"
-                html += f"""
-<div style="margin-bottom: 6px; padding: 8px 12px; font-size: 14px; color: #1a1a1a;
-            border-left: 2px solid #ddd;">
+            html += f"""
+<div style="margin-bottom: 6px; padding: 7px 12px; font-size: 14px;
+            border-left: 2px solid #e0e0e0;">
   <table width="100%" cellpadding="0" cellspacing="0"><tr>
     <td style="vertical-align: middle;">
-      <a href="{primary_url}" style="color: #1a1a8c; text-decoration: none; font-size: 14px;">{title}</a>
+      <a href="{link}" style="color: #1a1a8c; text-decoration: none; font-size: 14px;">{title}</a>
     </td>
     <td style="vertical-align: middle; text-align: right; white-space: nowrap; padding-left: 12px;">
       <span style="color: {color}; font-weight: bold; font-size: 12px;">{score}/10</span>
@@ -180,8 +128,7 @@ def format_html_email(analyzed_items, feed_warnings=None):
   </tr></table>
 </div>
 """
-
-        html += "</div>"  # close source block
+        html += "</div>"
 
     html += """
 <hr style="border: none; border-top: 1px solid #ddd; margin-top: 40px;">
