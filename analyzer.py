@@ -130,7 +130,7 @@ def analyze_items(items, interests):
 {interests}
 
 ## Your tasks:
-1. **Filter**: Discard any item not clearly relevant to my interests. Be strict.
+1. **Filter**: Discard any item not clearly relevant to my interests. Be moderately strict.
 2. **Score**: Assign each remaining item a relevance score from 1 to 10.
 3. **Keep original title**: Do NOT translate or modify the title.
 4. **Link**: Preserve the original URL.
