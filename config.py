@@ -19,7 +19,7 @@ with open("interests.md", "r", encoding="utf-8") as f:
 
 # ─── SCHEDULE ─────────────────────────────────────────────────────────────────
 # NOTE: The actual cron schedule is set in .github/workflows/digest.yml
-# Change it there. Current schedule: daily at 09:00 CET (08:00 UTC)
+# Change it there. Current schedule: daily at 05:30 CET (04:30 UTC)
 
 # ─── FETCH SETTINGS ───────────────────────────────────────────────────────────
 
