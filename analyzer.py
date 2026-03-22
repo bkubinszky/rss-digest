@@ -39,7 +39,7 @@ def call_llm(prompt, label=""):
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
             payload = json.dumps({
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4000}
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2000}
             }).encode("utf-8")
 
             req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
@@ -75,7 +75,7 @@ def call_llm(prompt, label=""):
                 model=GROQ_MODEL,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2,
-                max_tokens=4000,
+                max_tokens=2000,
             )
             return response.choices[0].message.content.strip(), "Groq"
 
@@ -105,37 +105,35 @@ def call_llm(prompt, label=""):
 # ─── ANALYZE ──────────────────────────────────────────────────────────────────
 
 def analyze_items(items, interests):
-    """Filter, score, summarize and annotate items in batches."""
+    """Filter and score items in batches. No summaries."""
     from config import MOCK_MODE
     from mock import MOCK_ANALYZED_ITEMS
     if MOCK_MODE:
         print("      MOCK MODE: skipping LLM calls, returning mock data.")
-        return MOCK_ANALYZED_ITEMS, [], {"Groq": 0, "Gemini": 0}
+        return MOCK_ANALYZED_ITEMS, [], {"Gemini": 0, "Groq": 0}
 
     if not items:
         return [], [], {}
 
     all_results = []
     api_errors  = []
-    api_usage   = {"Groq": 0, "Gemini": 0}
+    api_usage   = {"Gemini": 0, "Groq": 0}
     batches     = [items[i:i + BATCH_SIZE] for i in range(0, len(items), BATCH_SIZE)]
     print(f"      Processing {len(items)} items in {len(batches)} batches of up to {BATCH_SIZE}...")
 
     for idx, batch in enumerate(batches):
         print(f"      Batch {idx + 1}/{len(batches)}...")
 
-        prompt = f"""You are a precise and opinionated news curator. Analyze the RSS feed items below and produce a structured daily digest.
+        prompt = f"""You are a precise and opinionated news curator. Analyze the RSS feed items below.
 
 ## My interests and filters:
 {interests}
 
 ## Your tasks:
-1. **Filter**: Discard any item that is not clearly relevant to my interests. Be strict.
+1. **Filter**: Discard any item not clearly relevant to my interests. Be strict.
 2. **Score**: Assign each remaining item a relevance score from 1 to 10.
-3. **Keep original title**: Do NOT translate the title. Keep it exactly as it appears in the source.
-4. **Summarize**: Write a concise 2-sentence summary in German.
-5. **Why it matters**: Write 1 sentence in German explaining why this article is actionable or relevant from a monetization perspective.
-6. **Link**: Preserve the original URL.
+3. **Keep original title**: Do NOT translate or modify the title.
+4. **Link**: Preserve the original URL.
 
 ## Output format:
 Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fences.
@@ -145,9 +143,7 @@ Return ONLY a valid JSON array. No preamble, no explanation, no markdown code fe
     "title": "Original article title, unchanged",
     "source": "Feed source name",
     "link": "https://...",
-    "score": 8,
-    "summary": "2-sentence summary in German.",
-    "why_it_matters": "1 sentence in German on monetization relevance."
+    "score": 8
   }}
 ]
 
