@@ -1,16 +1,13 @@
-# Daily Digest v3
+# Daily Digest v4 (simple)
 
-A fully automated, free daily newsletter that fetches RSS feeds, filters and summarizes articles using AI, and delivers a clean digest to your inbox every morning.
+A fully automated, free daily newsletter that fetches RSS feeds, filters and scores articles using AI, and delivers a clean link digest to your inbox every morning. No summaries — just the most relevant articles, ranked and ready to read.
 
 ## What it does
 
 - Fetches articles from a configurable list of RSS feeds (last 24 hours)
-- Sends items to an LLM for filtering, scoring, and analysis
-- Groups articles by source, sorted by relevance score
-- Top article per source gets a 2-sentence German summary and a "why it matters" monetization note
-- All other articles listed with original title and link only
-- Merges duplicate stories from different sources into a single entry with multiple links
-- Delivers a formatted HTML email daily
+- Sends items to an LLM for filtering and scoring only — no summaries generated
+- Groups articles by source, ordered by relevance score descending
+- Delivers a formatted HTML email daily with title, score, and link per article
 - Automatically falls back to Groq if Gemini hits its daily token limit
 - Sends a clear error email if both APIs fail
 - Writes a structured run log to `log.json` after every run
@@ -25,8 +22,7 @@ rss-digest/
 ├── config.py        # All configurable values: feeds, thresholds, model names, flags
 ├── interests.md     # Your interests and filters in plain English — edit this to tune the digest
 ├── fetcher.py       # RSS feed fetching
-├── analyzer.py      # LLM calls (Gemini primary, Groq fallback), filtering, scoring, summarizing
-├── deduplicator.py  # Merges duplicate stories from different sources
+├── analyzer.py      # LLM calls (Gemini primary, Groq fallback), filtering and scoring only
 ├── mailer.py        # HTML email formatting and sending
 ├── logger.py        # Run logging to log.json
 ├── health.py        # Feed health tracking and warning logic
@@ -47,8 +43,6 @@ rss-digest/
 | Fallback LLM | Groq API — Llama 3.3 70B (free tier) |
 | Email delivery | Gmail SMTP |
 
-If Gemini hits its daily token limit, the script automatically retries with Groq. If both fail, you receive a descriptive error email instead of a silent empty digest.
-
 ## Setup
 
 ### 1. API keys and credentials
@@ -58,8 +52,6 @@ If Gemini hits its daily token limit, the script automatically retries with Groq
 - **Gmail App Password**: [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (requires 2FA enabled)
 
 ### 2. GitHub Secrets
-
-Add the following secrets under Settings → Secrets and variables → Actions:
 
 | Secret | Value |
 |---|---|
@@ -71,17 +63,16 @@ Add the following secrets under Settings → Secrets and variables → Actions:
 
 ### 3. GitHub Actions permissions
 
-Go to Settings → Actions → General → Workflow permissions and set to **Read and write permissions**. Required for the Actions bot to commit `log.json` and `feed_health.json` after each run.
+Settings → Actions → General → Workflow permissions → **Read and write permissions**.
 
 ### 4. Configure the script
 
-Edit `interests.md` directly in GitHub to tune what gets filtered and summarized — no Python required.
+Edit `interests.md` to tune filtering — no Python required.
 
-All other configurable values live in `config.py`:
+All other settings in `config.py`:
 
 | Setting | Default | Description |
 |---|---|---|
-| `YOUR_INTERESTS` | — | Loaded automatically from `interests.md` |
 | `FETCH_HOURS` | `24` | How many hours back to look for articles |
 | `SUMMARY_TRUNCATION` | `300` | Max characters of feed summary sent to LLM |
 | `BATCH_SIZE` | `15` | Number of articles per LLM call |
@@ -96,44 +87,37 @@ All other configurable values live in `config.py`:
 
 ### 5. Schedule
 
-The digest runs daily at **09:00 CET (08:00 UTC)**. To change the time, edit the cron line in `.github/workflows/digest.yml`:
+Daily at **09:00 CET (08:00 UTC)**. Edit cron in `.github/workflows/digest.yml`:
 
 ```yaml
 - cron: '0 8 * * *'
 ```
 
-Use [crontab.guru](https://crontab.guru) to customize. Note: GitHub Actions does not handle daylight saving time — expect a 1-hour drift between CET and CEST seasons.
-
 ## Email format
 
-Articles are grouped by source. Sources are ordered by their top article's score descending.
+Articles grouped by source, sources ordered by top article score descending.
 
 Per source:
 - All articles scoring `SOURCE_SCORE_THRESHOLD` (8) or above are shown
-- If fewer than `SOURCE_MAX_ARTICLES` (5) score that high, the top 5 are shown regardless
-- **Top article**: original title, score, 2-sentence German summary, "why it matters" monetization note, source link(s)
-- **Other articles**: original title, score, link only
+- If fewer than `SOURCE_MAX_ARTICLES` (5) score that high, top 5 shown regardless
+- Each article: original title (linked), relevance score
 
 ## Mock mode
 
-Set `MOCK_MODE = True` in `config.py` to skip all LLM calls and use pre-built fake data from `mock.py`. The email will show a yellow warning banner. Remember to set it back to `False` before the next scheduled run.
+Set `MOCK_MODE = True` in `config.py` to test without consuming API tokens. Yellow banner appears in the email. Set back to `False` before the next scheduled run.
 
 ## Run log
 
-After each run, `log.json` is automatically updated and committed. Each entry:
-
 ```json
 {
-  "timestamp": "2026-03-20T08:01:23Z",
+  "timestamp": "2026-03-22T08:01:23Z",
   "status": "success",
-  "items": { "fetched": 68, "after_filter": 21, "after_dedup": 18 },
-  "score_distribution": { "9-10": 3, "7-8": 9, "5-6": 6 },
-  "api_usage": { "Gemini": 5, "Groq": 0 },
+  "items": { "fetched": 77, "after_filter": 24, "after_dedup": 24 },
+  "score_distribution": { "9-10": 4, "7-8": 12, "5-6": 8 },
+  "api_usage": { "Gemini": 6, "Groq": 0 },
   "errors": []
 }
 ```
-
-`status` is one of `success`, `partial`, or `error`.
 
 ## Free tier limits
 
@@ -142,32 +126,33 @@ After each run, `log.json` is automatically updated and committed. Each entry:
 | Gemini 2.0 Flash (free) | 1,500 requests/day |
 | Groq (free) | 100,000 tokens/day |
 
-A single daily run uses roughly 6–8 API calls. Both limits are well within range for normal use. Use mock mode during development.
+A single daily run uses roughly 6–7 API calls with a 5-second pause between batches to respect per-minute rate limits.
 
 ---
 
 ## ⚠️ Features implemented but not yet fully tested in production
 
 **Retry with exponential backoff** (`analyzer.py`)
-Retries failed LLM calls up to 3 times with increasing delays on transient network errors or 5xx responses. Will be confirmed working the first time a real transient error occurs.
+Retries failed LLM calls up to 3 times with increasing delays on transient errors. Will be confirmed the first time a real transient error occurs.
 
 **Feed health check and warning** (`health.py`, `mailer.py`)
-Tracks consecutive fetch failures per feed in `feed_health.json`. After 3 failures, a red warning banner appears in the digest. Requires a feed to fail 3 days in a row to trigger — not yet observed in production.
+Tracks consecutive fetch failures in `feed_health.json`. After 3 failures a red warning banner appears. Not yet triggered in production.
 
 ---
 
 ## Backlog
 
 ### Content
-- Configurable summary length — short (1 sentence) vs detailed (3–4 sentences), switchable in `config.py`
-- Language toggle — switch output between German and English without rewriting interests
-- Trending topics detection — flag recurring themes across 3+ articles at the top of the digest
-- Keyword watchlist — terms that automatically boost an article's score
+- Optional summary mode — toggle summaries back on via `config.py` without switching branches
+- Configurable summary length — short vs detailed
+- Language toggle — German/English switchable
+- Trending topics detection — flag recurring themes across 3+ articles
+- Keyword watchlist — terms that boost an article's score automatically
 
 ### Feeds & delivery
 - Newsletter integration via Kill the Newsletter
-- OPML import support — import feed list from any RSS reader export
-- Skip sending if below minimum threshold — if fewer than N articles pass filtering, skip the email
+- OPML import support
+- Skip sending if fewer than N articles pass filtering
 
 ### Visibility
 - "First seen" indicator — flag articles from sources that rarely appear
@@ -176,31 +161,27 @@ Tracks consecutive fetch failures per feed in `feed_health.json`. After 3 failur
 
 ## Changelog
 
+### v4 (this branch: v4-simple)
+- Removed summaries and "why it matters" entirely — LLM does filtering and scoring only
+- Removed deduplication step
+- Simplified email layout: title, score, link per article — no summary blocks
+- Reduced `maxOutputTokens` from 4000 to 2000 (less output needed)
+- Added 5-second inter-batch delay regardless of API used (fixes Gemini per-minute rate limit issue)
+- `deduplicator.py` removed
+
 ### v3
-- Redesigned email format: articles grouped by source, ordered by top article score
-- Top article per source: original title, score, 2-sentence German summary, "why it matters" monetization note
-- All other articles: original title, score, link only
-- Gemini promoted to primary LLM (better multilingual quality); Groq demoted to fallback
-- Removed global score filter — display logic now handled per source in email formatter
-- Added `SOURCE_SCORE_THRESHOLD` and `SOURCE_MAX_ARTICLES` to `config.py`
-- Article titles kept in original language (no translation)
-- Updated mock data to match new structure
+- Redesigned email: articles grouped by source
+- Top article per source: 2-sentence German summary + "why it matters" monetization note
+- Gemini promoted to primary LLM; Groq demoted to fallback
+- Article titles kept in original language
+- Added `SOURCE_SCORE_THRESHOLD` and `SOURCE_MAX_ARTICLES`
 
 ### v2
 - Refactored into modular file structure
 - All configurable values centralized in `config.py`
 - Interests moved to `interests.md`
-- Added Groq as automatic fallback when Gemini rate limit is hit
-- Added retry with exponential backoff for transient errors
-- Added descriptive error email when both APIs fail
-- Added run logging to `log.json`
-- Added feed health tracking with warning banner
-- Added mock mode with visual banner
-- Schedule set to 09:00 CET daily
+- Gemini fallback, retry with backoff, error email, run logging, feed health tracking, mock mode
 
 ### v1
 - Single-file implementation
-- Groq-only LLM with batched processing
-- Gmail SMTP delivery
-- German-language output with title translation
-- Deduplication with merged source links
+- Groq-only, Gmail SMTP, German output, deduplication
