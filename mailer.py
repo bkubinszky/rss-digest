@@ -36,7 +36,6 @@ def format_html_email(analyzed_items, feed_warnings=None):
     now   = datetime.now()
     today = f"{DAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}"
 
-    num_items   = len(analyzed_items)
     num_sources = len(set(item.get("source", "") for item in analyzed_items))
 
     # ── Banners ───────────────────────────────────────────────────────────────
@@ -81,7 +80,8 @@ def format_html_email(analyzed_items, feed_warnings=None):
 """
 
     source_blocks = _build_source_sections(analyzed_items)
-
+    num_items = sum(len(items) for _, items, _ in source_blocks)
+    
     def score_color(s):
         if s >= 7: return "#2a7a2a"
         if s >= 4: return "#b05c00"
