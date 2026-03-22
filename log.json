@@ -244,5 +244,24 @@
       "Groq": 3
     },
     "errors": []
+  },
+  {
+    "timestamp": "2026-03-22T15:19:44.500107Z",
+    "status": "success",
+    "items": {
+      "fetched": 23,
+      "after_filter": 14,
+      "after_dedup": 14
+    },
+    "score_distribution": {
+      "9-10": 3,
+      "7-8": 4,
+      "5-6": 3
+    },
+    "api_usage": {
+      "Gemini": 0,
+      "Groq": 2
+    },
+    "errors": []
   }
 ]
