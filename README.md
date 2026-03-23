@@ -161,7 +161,7 @@ Tracks consecutive fetch failures in `feed_health.json`. After 3 failures a red 
 
 ## Changelog
 
-### v4 (this branch: v4-simple)
+### v4
 - Removed summaries and "why it matters" entirely — LLM does filtering and scoring only
 - Removed deduplication step
 - Simplified email layout: title, score, link per article — no summary blocks
