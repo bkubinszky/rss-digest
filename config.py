@@ -46,7 +46,7 @@ FAILURE_THRESHOLD = 3  # Consecutive fetch failures before a warning appears in 
 
 # ─── DEVELOPMENT ──────────────────────────────────────────────────────────────
 
-MOCK_MODE = True  # Set to True to skip LLM calls and use fake data for testing
+MOCK_MODE = False  # Set to True to skip LLM calls and use fake data for testing
 
 # ─── CREDENTIALS (from GitHub Secrets — never hardcode these) ─────────────────
 
