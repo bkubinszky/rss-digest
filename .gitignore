@@ -4,3 +4,7 @@ __pycache__/
 
 # Local development — never commit credentials
 .env
+
+# Runtime logs — not committed to public repo
+log.json
+feed_health.json
