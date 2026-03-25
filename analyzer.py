@@ -33,16 +33,19 @@ def is_transient(e):
 def call_llm(prompt, label=""):
     """Try Gemini first with retry/backoff, then fall back to Groq with retry/backoff."""
 
-    # — Gemini (primary) —
+    # — Gemini (primary) — API key sent in header, not URL query string
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
             payload = json.dumps({
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2000}
             }).encode("utf-8")
 
-            req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+            req = urllib.request.Request(url, data=payload, headers={
+                "Content-Type":  "application/json",
+                "x-goog-api-key": GEMINI_API_KEY,   # key in header, not URL
+            })
             with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
 
@@ -130,7 +133,7 @@ def analyze_items(items, interests):
 {interests}
 
 ## Your tasks:
-1. **Filter**: Discard any item not clearly relevant to my interests. Be moderately strict.
+1. **Filter**: Discard any item not clearly relevant to my interests. Be strict.
 2. **Score**: Assign each remaining item a relevance score from 1 to 10.
 3. **Keep original title**: Do NOT translate or modify the title.
 4. **Link**: Preserve the original URL.
