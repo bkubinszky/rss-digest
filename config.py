@@ -9,6 +9,7 @@ RSS_FEEDS = [
     "https://retail.at/feed/",
     "https://futurezone.at/xml/rss",
     "https://www.derstandard.at/rss/web",
+    "https://www.derstandard.at/rss/zukunft",
     # Add as many as you like
 ]
 
