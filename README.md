@@ -1,4 +1,4 @@
-# Daily Digest v4 (simple)
+# Daily Digest v4
 
 A fully automated, free daily newsletter that fetches RSS feeds, filters and scores articles using AI, and delivers a clean link digest to your inbox every morning. No summaries — just the most relevant articles, ranked and ready to read.
 
@@ -7,10 +7,9 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sco
 - Fetches articles from a configurable list of RSS feeds (last 24 hours)
 - Sends items to an LLM for filtering and scoring only — no summaries generated
 - Groups articles by source, ordered by relevance score descending
-- Delivers a formatted HTML email daily with title, score, and link per article
+- Delivers a clean editorial HTML email daily with title, score, and link per article
 - Automatically falls back to Groq if Gemini hits its daily token limit
 - Sends a clear error email if both APIs fail
-- Writes a structured run log to `log.json` after every run
 - Tracks feed health and shows a warning banner if a feed has been failing for 3+ days
 - Supports mock mode for testing without consuming any API tokens
 
@@ -18,20 +17,20 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sco
 
 ```
 rss-digest/
-├── digest.py        # Main orchestrator — runs the pipeline
-├── config.py        # All configurable values: feeds, thresholds, model names, flags
-├── interests.md     # Your interests and filters in plain English — edit this to tune the digest
-├── fetcher.py       # RSS feed fetching
-├── analyzer.py      # LLM calls (Gemini primary, Groq fallback), filtering and scoring only
-├── mailer.py        # HTML email formatting and sending
-├── logger.py        # Run logging to log.json
-├── health.py        # Feed health tracking and warning logic
-├── mock.py          # Pre-built fake results for token-free testing
-├── log.json         # Auto-generated run history (committed by Actions bot)
-├── feed_health.json # Auto-generated feed failure counters (committed by Actions bot)
+├── digest.py          # Main orchestrator — runs the pipeline
+├── config.py          # All configurable values: feeds, thresholds, model names, flags
+├── interests.md       # Your interests and filters in plain English — edit this to tune the digest
+├── fetcher.py         # RSS feed fetching
+├── analyzer.py        # LLM calls (Gemini primary, Groq fallback), filtering and scoring only
+├── mailer.py          # HTML email formatting and sending
+├── logger.py          # Run logging (stdout only — not committed to repo)
+├── health.py          # Feed health tracking and warning logic
+├── mock.py            # Pre-built fake results for token-free testing
+├── requirements.txt   # Pinned Python dependencies
+├── .gitignore         # Excludes .env, __pycache__, and runtime log files
 └── .github/
     └── workflows/
-        └── digest.yml  # GitHub Actions schedule and workflow
+        └── digest.yml # GitHub Actions schedule and workflow
 ```
 
 ## Stack
@@ -43,6 +42,8 @@ rss-digest/
 | Fallback LLM | Groq API — Llama 3.3 70B (free tier) |
 | Email delivery | Gmail SMTP |
 
+If Gemini hits its daily token limit, the script automatically retries with Groq. If both fail, you receive a descriptive error email instead of a silent empty digest.
+
 ## Setup
 
 ### 1. API keys and credentials
@@ -53,6 +54,8 @@ rss-digest/
 
 ### 2. GitHub Secrets
 
+Add the following secrets under Settings → Secrets and variables → Actions:
+
 | Secret | Value |
 |---|---|
 | `GEMINI_API_KEY` | Your Gemini API key |
@@ -61,11 +64,7 @@ rss-digest/
 | `EMAIL_PASSWORD` | Your 16-character Gmail App Password |
 | `EMAIL_TO` | Destination email address |
 
-### 3. GitHub Actions permissions
-
-Settings → Actions → General → Workflow permissions → **Read and write permissions**.
-
-### 4. Configure the script
+### 3. Configure the script
 
 Edit `interests.md` to tune filtering — no Python required.
 
@@ -85,13 +84,15 @@ All other settings in `config.py`:
 | `FAILURE_THRESHOLD` | `3` | Consecutive feed failures before a warning appears |
 | `MOCK_MODE` | `False` | Set to `True` for token-free testing |
 
-### 5. Schedule
+### 4. Schedule
 
-Daily at **09:00 CET (08:00 UTC)**. Edit cron in `.github/workflows/digest.yml`:
+Daily at **05:30 CET (04:30 UTC)**. Edit cron in `.github/workflows/digest.yml`:
 
 ```yaml
-- cron: '0 8 * * *'
+- cron: '30 4 * * *'
 ```
+
+Use [crontab.guru](https://crontab.guru) to customize. Note: GitHub Actions does not handle daylight saving time — expect a 1-hour drift between CET and CEST seasons.
 
 ## Email format
 
@@ -100,24 +101,11 @@ Articles grouped by source, sources ordered by top article score descending.
 Per source:
 - All articles scoring `SOURCE_SCORE_THRESHOLD` (8) or above are shown
 - If fewer than `SOURCE_MAX_ARTICLES` (5) score that high, top 5 shown regardless
-- Each article: original title (linked), relevance score
+- Each article: original title (linked), relevance score pill (green / amber / grey)
 
 ## Mock mode
 
-Set `MOCK_MODE = True` in `config.py` to test without consuming API tokens. Yellow banner appears in the email. Set back to `False` before the next scheduled run.
-
-## Run log
-
-```json
-{
-  "timestamp": "2026-03-22T08:01:23Z",
-  "status": "success",
-  "items": { "fetched": 77, "after_filter": 24, "after_dedup": 24 },
-  "score_distribution": { "9-10": 4, "7-8": 12, "5-6": 8 },
-  "api_usage": { "Gemini": 6, "Groq": 0 },
-  "errors": []
-}
-```
+Set `MOCK_MODE = True` in `config.py` to test without consuming API tokens. A yellow banner appears in the email. Set back to `False` before the next scheduled run.
 
 ## Free tier limits
 
@@ -130,17 +118,26 @@ A single daily run uses roughly 6–7 API calls with a 5-second pause between ba
 
 ---
 
+## Security notes
+
+- All credentials are loaded from GitHub Secrets via environment variables — never hardcoded
+- Gemini API key is sent as a request header (`x-goog-api-key`), not as a URL query string
+- All user-sourced strings (titles, source names, feed warnings) are HTML-escaped before rendering
+- All URLs are validated to `http`/`https` only before insertion into email HTML
+- Python dependencies are pinned in `requirements.txt`
+- Workflow runs with `contents: read` permissions (minimum required)
+- `.env` is excluded from commits via `.gitignore`
+- Runtime logs (`log.json`, `feed_health.json`) are not committed to the repo — check the GitHub Actions run logs instead
+
+---
+
 ## ⚠️ Features implemented but not yet fully tested in production
 
 **Retry with exponential backoff** (`analyzer.py`)
 Retries failed LLM calls up to 3 times with increasing delays on transient errors. Will be confirmed the first time a real transient error occurs.
 
 **Feed health check and warning** (`health.py`, `mailer.py`)
-Tracks consecutive fetch failures in `feed_health.json`. After 3 failures a red warning banner appears. Not yet triggered in production.
-
-### Liability
-
-This repository is provided for informational and experimental purposes only. The code is offered “as is”, without any warranties of any kind, express or implied. I make no guarantees regarding its correctness, reliability, or suitability for any purpose. Use of this code is entirely at your own risk. I assume no responsibility or liability for any damages, losses, or issues arising from its use, misuse, or inability to use the contents of this repository.
+Tracks consecutive fetch failures. After 3 failures a red warning banner appears in the digest. Not yet triggered in production.
 
 ---
 
@@ -165,12 +162,16 @@ This repository is provided for informational and experimental purposes only. Th
 
 ## Changelog
 
-### v4
+### v4 (current)
 - Removed summaries and "why it matters" entirely — LLM does filtering and scoring only
 - Removed deduplication step
-- Simplified email layout: title, score, link per article — no summary blocks
-- Reduced `maxOutputTokens` from 4000 to 2000 (less output needed)
-- Added 5-second inter-batch delay regardless of API used (fixes Gemini per-minute rate limit issue)
+- Redesigned email: clean editorial layout inspired by The Editorial Ledger — italic serif header, uppercase source names, score pills, minimal borders
+- All user-sourced content HTML-escaped; URLs validated to http/https only
+- Gemini API key moved from URL query string to request header
+- Python dependencies pinned in `requirements.txt`
+- Workflow scoped to `contents: read` permissions
+- Runtime logs no longer committed to repo — available in GitHub Actions run logs
+- Added 5-second inter-batch delay to respect Gemini per-minute rate limits
 - `deduplicator.py` removed
 
 ### v3
