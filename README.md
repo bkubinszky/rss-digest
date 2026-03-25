@@ -190,3 +190,9 @@ Tracks consecutive fetch failures. After 3 failures a red warning banner appears
 ### v1
 - Single-file implementation
 - Groq-only, Gmail SMTP, German output, deduplication
+
+---
+
+## Disclaimer
+
+This repository is provided for informational and experimental purposes only. The code is offered "as is", without any warranties of any kind, express or implied. I make no guarantees regarding its correctness, reliability, or suitability for any purpose. Use of this code is entirely at your own risk. I assume no responsibility or liability for any damages, losses, or issues arising from its use, misuse, or inability to use the contents of this repository.
