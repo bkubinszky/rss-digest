@@ -1,8 +1,26 @@
+import html
 import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from urllib.parse import urlparse
 from config import MOCK_MODE, SOURCE_SCORE_THRESHOLD, SOURCE_MAX_ARTICLES
+
+
+def _safe_url(url):
+    """Allow only http and https URLs. Return # for anything else."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme in ("http", "https"):
+            return url
+    except Exception:
+        pass
+    return "#"
+
+
+def _e(text):
+    """Escape HTML special characters in user-sourced strings."""
+    return html.escape(str(text), quote=True)
 
 
 def _build_source_sections(analyzed_items):
@@ -52,7 +70,6 @@ def format_html_email(analyzed_items, feed_warnings=None):
     now   = datetime.now()
     today = f"{DAYS_DE[now.weekday()]}, {now.day}. {MONTHS_DE[now.month - 1]} {now.year}"
 
-    num_items   = 0  # calculated after source_blocks are built
     num_sources = len(set(item.get("source", "") for item in analyzed_items))
 
     # ── Banners ───────────────────────────────────────────────────────────────
@@ -71,7 +88,7 @@ def format_html_email(analyzed_items, feed_warnings=None):
     feed_warning_banner = ""
     if feed_warnings:
         feed_list = "".join(
-            f"<li style='margin-bottom: 3px;'>{w['source']} &mdash; {w['consecutive_failures']} Tage fehlgeschlagen</li>"
+            f"<li style='margin-bottom: 3px;'>{_e(w['source'])} &mdash; {int(w['consecutive_failures'])} Tage fehlgeschlagen</li>"
             for w in feed_warnings
         )
         feed_warning_banner = f"""
@@ -98,7 +115,7 @@ def format_html_email(analyzed_items, feed_warnings=None):
                      font-style: italic; color: #1a1a1a;">Daily Digest</td>
           <td align="right" style="font-family: Georgia, serif; font-size: 11px;
                                    color: #999; letter-spacing: 0.08em; text-transform: uppercase;
-                                   vertical-align: bottom; padding-bottom: 4px;">{today}</td>
+                                   vertical-align: bottom; padding-bottom: 4px;">{_e(today)}</td>
         </tr></table>
       </td></tr>
       <tr><td style="border-top: 1px solid #1a1a1a; padding-top: 32px;
@@ -119,10 +136,10 @@ def format_html_email(analyzed_items, feed_warnings=None):
     for source, items, _ in source_blocks:
         rows = ""
         for item in items:
-            score = item.get("score", 0)
-            title = item.get("title", "No title")
-            link  = item.get("link", "#")
-            pill  = _score_pill(score)
+            score     = item.get("score", 0)
+            title     = _e(item.get("title", "No title"))
+            link      = _safe_url(item.get("link", "#"))
+            pill      = _score_pill(score)
 
             rows += f"""
 <tr>
@@ -143,15 +160,13 @@ def format_html_email(analyzed_items, feed_warnings=None):
         sections_html += f"""
 <tr><td style="padding-top: 32px; padding-bottom: 8px;">
   <p style="margin: 0 0 8px 0; font-family: Georgia, serif; font-size: 11px;
-            letter-spacing: 0.1em; text-transform: uppercase; color: #999;
-            font-style: normal;">{source.upper()}</p>
+            letter-spacing: 0.1em; text-transform: uppercase; color: #999;">{_e(source.upper())}</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="border-top: 1px solid #e0e0e0;">
     {rows}
   </table>
 </td></tr>
 """
 
-    # ── Full email ────────────────────────────────────────────────────────────
     return f"""
 <!DOCTYPE html>
 <html>
@@ -170,7 +185,7 @@ def format_html_email(analyzed_items, feed_warnings=None):
           <td align="right" style="font-family: Georgia, serif; font-size: 11px;
                                    color: #999; letter-spacing: 0.08em; text-transform: uppercase;
                                    vertical-align: bottom; padding-bottom: 5px;">
-            {today}
+            {_e(today)}
           </td>
         </tr></table>
       </td></tr>
@@ -209,7 +224,7 @@ def format_html_email(analyzed_items, feed_warnings=None):
 def format_error_email(errors):
     """Build a clean error notification email."""
     today      = datetime.now().strftime("%d.%m.%Y %H:%M")
-    error_list = "".join(f"<li style='margin-bottom:6px;'>{e}</li>" for e in errors)
+    error_list = "".join(f"<li style='margin-bottom:6px;'>{_e(e)}</li>" for e in errors)
 
     return f"""
 <!DOCTYPE html>
@@ -225,7 +240,7 @@ def format_error_email(errors):
           </td>
           <td align="right" style="font-family: Georgia, serif; font-size: 11px; color: #999;
                                    letter-spacing: 0.08em; text-transform: uppercase;
-                                   vertical-align: bottom; padding-bottom: 5px;">{today}</td>
+                                   vertical-align: bottom; padding-bottom: 5px;">{_e(today)}</td>
         </tr></table>
       </td></tr>
       <tr><td style="border-top: 1px solid #c00; padding-top: 24px;
