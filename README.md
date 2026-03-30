@@ -86,7 +86,7 @@ All other settings in `config.py`:
 
 ### 4. Schedule
 
-Daily at **05:30 CEST (04:30 UTC)**. Edit cron in `.github/workflows/digest.yml`:
+Daily at **05:30 CEST (03:30 UTC)**. Edit cron in `.github/workflows/digest.yml`:
 
 ```yaml
 - cron: '30 3 * * *'
