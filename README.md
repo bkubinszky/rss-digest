@@ -86,10 +86,10 @@ All other settings in `config.py`:
 
 ### 4. Schedule
 
-Daily at **05:30 CET (04:30 UTC)**. Edit cron in `.github/workflows/digest.yml`:
+Daily at **05:30 CEST (04:30 UTC)**. Edit cron in `.github/workflows/digest.yml`:
 
 ```yaml
-- cron: '30 4 * * *'
+- cron: '30 3 * * *'
 ```
 
 Use [crontab.guru](https://crontab.guru) to customize. Note: GitHub Actions does not handle daylight saving time — expect a 1-hour drift between CET and CEST seasons.
