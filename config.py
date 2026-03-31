@@ -16,8 +16,7 @@ RSS_FEEDS = [
 # ─── INTERESTS ────────────────────────────────────────────────────────────────
 # Edit interests.md directly in GitHub — no need to touch Python files.
 
-with open("interests.md", "r", encoding="utf-8") as f:
-    YOUR_INTERESTS = f.read()
+YOUR_INTERESTS = os.environ["YOUR_INTERESTS"]
 
 # ─── SCHEDULE ─────────────────────────────────────────────────────────────────
 # NOTE: The actual cron schedule is set in .github/workflows/digest.yml
