@@ -19,7 +19,6 @@ A fully automated, free daily newsletter that fetches RSS feeds, filters and sco
 rss-digest/
 ├── digest.py          # Main orchestrator — runs the pipeline
 ├── config.py          # All configurable values: feeds, thresholds, model names, flags
-├── interests.md       # Your interests and filters in plain English — edit this to tune the digest
 ├── fetcher.py         # RSS feed fetching
 ├── analyzer.py        # LLM calls (Gemini primary, Groq fallback), filtering and scoring only
 ├── mailer.py          # HTML email formatting and sending
@@ -63,10 +62,11 @@ Add the following secrets under Settings → Secrets and variables → Actions:
 | `EMAIL_FROM` | Your Gmail address |
 | `EMAIL_PASSWORD` | Your 16-character Gmail App Password |
 | `EMAIL_TO` | Destination email address |
+| `YOUR_INTERESTS` | Full text of your interests and filters |
 
 ### 3. Configure the script
 
-Edit `interests.md` to tune filtering — no Python required.
+Edit the `YOUR_INTERESTS` GitHub Secret to tune filtering — go to Settings → Secrets and variables → Actions, find `YOUR_INTERESTS`, and update the value.
 
 All other settings in `config.py`:
 
