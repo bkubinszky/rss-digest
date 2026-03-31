@@ -31,4 +31,5 @@ jobs:
           EMAIL_FROM:     ${{ secrets.EMAIL_FROM }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_TO:       ${{ secrets.EMAIL_TO }}
+          YOUR_INTERESTS: ${{ secrets.YOUR_INTERESTS }}
         run: python digest.py
