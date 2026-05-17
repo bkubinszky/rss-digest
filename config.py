@@ -10,6 +10,8 @@ RSS_FEEDS = [
     "https://futurezone.at/xml/rss",
     "https://www.derstandard.at/rss/web",
     "https://www.derstandard.at/rss/zukunft",
+    "https://linuxiac.com/feed/",
+    "https://www.linuxtoday.com/feed/",
     # Add as many as you like
 ]
 
