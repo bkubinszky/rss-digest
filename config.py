@@ -30,7 +30,7 @@ SUMMARY_TRUNCATION = 300  # Max characters of feed summary sent to LLM
 # ─── LLM SETTINGS ─────────────────────────────────────────────────────────────
 
 GEMINI_MODEL = "gemini-2.0-flash"
-GROQ_MODEL   = "llama-3.3-70b-versatile"
+GROQ_MODEL   = "openai/gpt-oss-20b"
 BATCH_SIZE   = 15  # Number of articles per LLM call
 MAX_RETRIES  = 3   # Retry attempts per API call on transient errors
 BACKOFF_BASE = 5   # Base seconds for exponential backoff (5s, 10s, 20s)
